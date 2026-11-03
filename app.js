@@ -24,6 +24,37 @@ function notifyAdmin(s){$('admin-message').textContent=s;$('admin-message').hidd
 async function refresh(){if(!db)return;const{data,error}=await db.from('products').select('*').order('created_at',{ascending:false});if(error){toast('Não foi possível carregar os produtos.');return}products=data||[];render();renderAdmin()}
 function renderAdmin(){if(!session)return;$('admin-products').innerHTML=products.map(p=>`<div class="admin-product"><span><b>${esc(p.name)}</b><br>${money(p.price)} · ${p.stock} em estoque · ${p.active?'Publicado':'Oculto'}</span><span><button data-edit="${esc(p.id)}">Editar</button><button class="danger" data-delete="${esc(p.id)}">Excluir</button></span></div>`).join('')}
 function showPanel(user){session=user;$('login-form').hidden=!!user;$('admin-panel').hidden=!user;$('admin-message').hidden=true;renderAdmin()}
+// A autorização OAuth é iniciada apenas por um administrador autenticado.
+const connectShippingButton=document.createElement('button');
+connectShippingButton.type='button';
+connectShippingButton.className='btn btn-primary';
+connectShippingButton.id='connect-melhor-envio';
+connectShippingButton.textContent='Conectar ao Melhor Envio (Sandbox) ↗';
+const shippingConnectionBox=document.createElement('div');
+shippingConnectionBox.style.cssText='margin:18px 0;padding:18px;border:1px solid #e6d7e6;border-radius:14px';
+const shippingConnectionTitle=document.createElement('strong');
+shippingConnectionTitle.textContent='Integração de frete';
+const shippingConnectionHelp=document.createElement('p');
+shippingConnectionHelp.textContent='Autorize a loja no Melhor Envio para iniciar os testes de cálculo de frete.';
+shippingConnectionBox.append(shippingConnectionTitle,shippingConnectionHelp,connectShippingButton);
+$('admin-products').before(shippingConnectionBox);
+connectShippingButton.onclick=async()=>{
+  if(!db||!session){notifyAdmin('Entre como administrador para conectar o Melhor Envio.');return}
+  connectShippingButton.disabled=true;
+  connectShippingButton.textContent='Preparando autorização…';
+  try{
+    const {data:{session:currentSession},error:sessionError}=await db.auth.getSession();
+    if(sessionError||!currentSession?.access_token)throw new Error('Sessão expirada. Entre novamente no painel.');
+    const endpoint=`${cfg.supabaseUrl.replace(/\/$/,'')}/functions/v1/melhor-envio-callback/start`;
+    const response=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${currentSession.access_token}`,'apikey':cfg.supabaseAnonKey},body:'{}'});
+    const raw=await response.text();
+    let payload;try{payload=JSON.parse(raw)}catch{payload={message:raw}}
+    if(!response.ok)throw new Error(payload?.message||`Falha HTTP ${response.status} ao iniciar autorização.`);
+    const authorizationUrl=new URL(payload.authorization_url);
+    if(authorizationUrl.protocol!=='https:'||authorizationUrl.hostname!=='sandbox.melhorenvio.com.br')throw new Error('O endereço de autorização não é o Sandbox esperado.');
+    window.location.assign(authorizationUrl.href);
+  }catch(error){notifyAdmin('Não foi possível conectar ao Melhor Envio: '+(error.message||'tente novamente.'));connectShippingButton.disabled=false;connectShippingButton.textContent='Conectar ao Melhor Envio (Sandbox) ↗'}
+};
 function edit(p){editing=p?.id||null;$('product-form').hidden=false;$('form-title').textContent=p?'Editar produto':'Novo produto';$('product-name').value=p?.name||'';$('product-price').value=p?.price||'';$('product-stock').value=p?.stock??0;$('product-category').value=p?.category||'Capinhas & Acessórios';$('product-condition').value=p?.condition||'Novo';$('product-image').value=p?.image_url||'';window.loadProductImages?.(p);$('product-models').value=p?.models||'';$('product-colors').value=p?.colors||'';$('product-description').value=p?.description||'';$('product-active').checked=p?.active??true;$('product-form').scrollIntoView({behavior:'smooth',block:'nearest'})}
 async function init(){if(configured()&&window.supabase){db=window.supabase.createClient(cfg.supabaseUrl,cfg.supabaseAnonKey);window.setupRecovery?.(db);await refresh();const{data}=await db.auth.getSession();if(data?.session&&!location.hash.includes('type=recovery')){const{data:role}=await db.from('admins').select('user_id').eq('user_id',data.session.user.id).maybeSingle();if(role)showPanel(data.session.user)}}else{notifyAdmin('Modo demonstração: para habilitar login, cadastro e exclusão de produtos, configure o Supabase em config.js conforme o README. Os itens exibidos são exemplos.')}const hash=decodeURIComponent(location.hash);if(hash==='#admin')$('admin-dialog').showModal();if(hash.startsWith('#produto-')){const p=product(hash.substring(9));if(p)details(p)}}
 $('filter-tabs').addEventListener('click',e=>{const b=e.target.closest('[data-category]');if(!b)return;category=b.dataset.category;document.querySelectorAll('.chip').forEach(c=>c.classList.toggle('active',c===b));render()});$('search').addEventListener('input',render);$('sort').addEventListener('change',render);$('search-toggle').onclick=()=>{$('search').focus();$('colecao').scrollIntoView({behavior:'smooth'})};$('products').addEventListener('click',e=>{const d=e.target.closest('[data-details]'),b=e.target.closest('[data-buy]');if(d)details(product(d.dataset.details));if(b)whatsapp(product(b.dataset.buy))});$('close-details').onclick=()=>$('details').close();$('close-admin').onclick=()=>$('admin-dialog').close();document.querySelectorAll('a[href="#admin"]').forEach(a=>a.onclick=e=>{e.preventDefault();$('admin-dialog').showModal()});
