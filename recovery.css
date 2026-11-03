@@ -1,0 +1,6 @@
+.recovery-link{display:block;margin-top:18px;font-size:13px;padding:4px 0}
+#recover-dialog h2{font-family:Outfit,sans-serif;font-size:34px;margin:10px 0 12px}
+.recovery-explanation{font-size:14px;line-height:1.6;color:#716b7d;margin:0 0 24px}
+#recover-dialog form label{display:block;font-size:12px;font-weight:800;margin:0 0 14px}
+#recover-dialog input{display:block;width:100%;border:1px solid #e1dbea;padding:12px;border-radius:9px;margin-top:6px;outline-color:var(--purple)}
+#recover-dialog .recovery-back{display:block;margin-top:22px;font-size:13px}
