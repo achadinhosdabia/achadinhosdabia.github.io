@@ -1,0 +1,25 @@
+:root{--purple:#8973bf;--pink:#f8d4dd;--cream:#fffaf7}
+.announcement{background:#4d4059}
+.brand{letter-spacing:-.9px;white-space:nowrap}
+.brand-accent{color:#b784a5}
+.brand-mark{background:#f9e3ea;color:#b68199}
+.hero{background:linear-gradient(125deg,#fdf5f3 0%,#f6e7ed 50%,#eee6f6 100%)}
+.hero-orbit{background:#e9d5e6}.orbit-two{background:#f6dbe6}
+.hero-copy .eyebrow{color:#ab6c8d}
+.hero-copy h1 em{color:#ba7c9d}
+.btn-primary,.chip.active{background:#936f9f;border-color:#936f9f;box-shadow:0 9px 20px #936f9f2b}
+.ticker{background:#e9d3df;color:#604d62}
+.product-image .illustration-phone{box-shadow:10px 16px 20px #5e4c5a22}
+.value-grid article{background:#fdf6f8}
+.value-grid article>span{background:#f6e0ea;color:#b57c9a}
+.about{background:#f6e6e9}
+.about h2 em,.section-top h2 em{color:#b782a4}
+.botanical{position:absolute;pointer-events:none;z-index:1;filter:drop-shadow(0 13px 12px #986a7f24)}
+.botanical-hero{width:275px;right:-8%;bottom:2%;transform:rotate(10deg);opacity:.96}
+.botanical-about{width:350px;right:0;bottom:-90px;transform:rotate(-7deg);opacity:.88}
+.hero-art .phone{z-index:2}
+.hero-sticker{z-index:3}
+.hero-copy{z-index:3}
+.about-inner>div:first-child{position:relative;z-index:2}
+@media(max-width:900px){.botanical-hero{right:-18%;width:250px}.botanical-about{right:-70px}}
+@media(max-width:650px){.brand{font-size:18px}.brand small{font-size:7px}.botanical-hero{right:-24%;bottom:-5%;width:230px}.botanical-about{width:250px;right:-70px;bottom:-75px;opacity:.38}}

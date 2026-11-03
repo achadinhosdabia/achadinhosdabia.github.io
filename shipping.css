@@ -1,0 +1,7 @@
+.shipping-widget{margin:19px 0 14px;padding:17px;border:1px solid #e8dce9;background:#fff9fc;border-radius:13px}
+.shipping-widget h3{font-size:19px;margin:0 0 5px}.shipping-widget p{font-size:12px;margin:5px 0 12px;color:#786b7d}
+.shipping-widget label{font-size:12px;font-weight:800}.freight-row{display:flex;gap:8px;margin-top:7px}.freight-row input{min-width:0;width:100%;border:1px solid #dbcddd;border-radius:8px;padding:11px}.freight-row .btn{padding:12px;white-space:nowrap;box-shadow:none}
+.freight-result{font-size:12px;line-height:1.5;margin:10px 0}.freight-result small{display:block;margin-top:7px;color:#777}
+.freight-option{display:block;width:100%;text-align:left;background:white;border:1px solid #e9dcea;border-radius:8px;padding:10px;margin-top:7px;color:#56435b;font-weight:700}
+.freight-alternatives{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.freight-alternatives button{border:1px solid #d9c7dc;background:white;border-radius:8px;padding:10px;font-size:11px;font-weight:800;color:#735477}
+.shipping-fields{border:1px solid #e6dcea;border-radius:12px;padding:14px;margin-top:18px}.shipping-fields legend{font-weight:800;font-family:Outfit}.shipping-fields p,.shipping-fields small{font-size:12px;color:#746e7a}.shipping-fields-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
