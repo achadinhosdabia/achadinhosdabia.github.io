@@ -14,7 +14,9 @@ function renderShippingWidget(){
   if(!p||!details||details.querySelector('.shipping-widget'))return;
   const widget=document.createElement('section');
   widget.className='shipping-widget';
-  widget.innerHTML=`<h3>Entrega e frete</h3><p>Origem: CEP configurado pela loja</p><form class="freight-form"><label for="destination-zip">Calcule o frete para seu CEP</label><div class="freight-row"><input id="destination-zip" inputmode="numeric" placeholder="00000-000" maxlength="9" aria-label="CEP de destino" required><button class="btn btn-primary" type="submit">Calcular</button></div></form><div class="freight-result" role="status" aria-live="polite"></div><div class="freight-alternatives"><button type="button" data-delivery="arrange">Conversar sobre o frete ↗</button><button type="button" data-delivery="pickup">Combinar retirada em mãos ↗</button></div>`;
+  const origin=zipDigits(p.origin_zip||cfg.originZip||'18076070');
+  const maskedOrigin=/^\d{8}$/.test(origin)?`${origin.slice(0,5)}-${origin.slice(5)}`:'a confirmar';
+  widget.innerHTML=`<h3>Entrega e frete</h3><p>Origem do produto: CEP ${maskedOrigin}</p><form class="freight-form"><label for="destination-zip">Calcule o frete para seu CEP</label><div class="freight-row"><input id="destination-zip" inputmode="numeric" placeholder="00000-000" maxlength="9" aria-label="CEP de destino" required><button class="btn btn-primary" type="submit">Calcular</button></div></form><div class="freight-result" role="status" aria-live="polite"></div><div class="freight-alternatives"><button type="button" data-delivery="arrange">Conversar sobre o frete ↗</button><button type="button" data-delivery="pickup">Combinar retirada em mãos ↗</button></div>`;
   details.insertBefore(widget,details.querySelector('#detail-buy'));
   const form=widget.querySelector('.freight-form');
   const result=widget.querySelector('.freight-result');
@@ -46,11 +48,12 @@ window.addEventListener('load',()=>{
   const detailBody=document.getElementById('details-body');
   new MutationObserver(renderShippingWidget).observe(detailBody,{childList:true,subtree:false});
   const form=document.getElementById('product-form');
-  form.insertAdjacentHTML('beforeend',`<fieldset class="shipping-fields"><legend>Frete do produto</legend><label class="checkbox-label"><input type="checkbox" id="shipping-enabled"> Permitir cotação automática</label><p>Informe as medidas do produto já embalado.</p><div class="shipping-fields-grid"><label>Peso (kg)<input id="shipping-weight" type="number" step="0.001" min="0.001" placeholder="0.500"></label><label>Altura (cm)<input id="shipping-height" type="number" step="0.1" min="0.1"></label><label>Largura (cm)<input id="shipping-width" type="number" step="0.1" min="0.1"></label><label>Comprimento (cm)<input id="shipping-length" type="number" step="0.1" min="0.1"></label></div><small>Se o item for grande demais, desative a cotação e deixe o frete a combinar.</small></fieldset>`);
+  form.insertAdjacentHTML('beforeend',`<fieldset class="shipping-fields"><legend>Frete do produto</legend><label>CEP de origem deste produto (opcional)<input id="product-origin-zip" inputmode="numeric" maxlength="9" placeholder="18076-070"></label><small>Deixe em branco para usar o CEP padrão configurado na loja.</small><label class="checkbox-label"><input type="checkbox" id="shipping-enabled"> Permitir cotação automática</label><p>Informe as medidas do produto já embalado.</p><div class="shipping-fields-grid"><label>Peso (kg)<input id="shipping-weight" type="number" step="0.001" min="0.001" placeholder="0.500"></label><label>Altura (cm)<input id="shipping-height" type="number" step="0.1" min="0.1"></label><label>Largura (cm)<input id="shipping-width" type="number" step="0.1" min="0.1"></label><label>Comprimento (cm)<input id="shipping-length" type="number" step="0.1" min="0.1"></label></div><small>Se o item for grande demais, desative a cotação e deixe o frete a combinar.</small></fieldset>`);
   new MutationObserver(()=>{
     if(form.hidden)return;
     const p=editing?product(editing):null;
     document.getElementById('shipping-enabled').checked=!!p?.shipping_enabled;
+    document.getElementById('product-origin-zip').value=p?.origin_zip?`${p.origin_zip.slice(0,5)}-${p.origin_zip.slice(5)}`:'';
     for(const[k,id]of[['weight_kg','shipping-weight'],['height_cm','shipping-height'],['width_cm','shipping-width'],['length_cm','shipping-length']])document.getElementById(id).value=p?.[k]??'';
   }).observe(form,{attributes:true,attributeFilter:['hidden']});
   form.addEventListener('submit',e=>{
