@@ -56,10 +56,18 @@ Deno.serve(async (req) => {
     const url = Deno.env.get('SUPABASE_URL');
     const key = Deno.env.get('SUPABASE_ANON_KEY');
     if (!url || !key) return reply(503, { error: 'Serviço temporariamente indisponível.' });
+    const internalSecret = Deno.env.get('CHECKOUT_INTERNAL_SECRET') || '';
+    if (internalSecret.length < 32)
+      return reply(503, { error: 'Credencial interna de frete não configurada.' });
     const invoke = async (fn: string, payload: unknown) => {
       const res = await fetch(url + '/functions/v1/' + fn, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', apikey: key, Authorization: 'Bearer ' + key },
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: key,
+          Authorization: 'Bearer ' + key,
+          ...(fn === 'quote-shipping' ? { 'x-checkout-internal-secret': internalSecret } : {}),
+        },
         body: JSON.stringify(payload),
       });
       const data = await res.json().catch(() => null);
