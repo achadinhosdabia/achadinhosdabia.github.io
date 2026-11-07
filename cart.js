@@ -121,7 +121,7 @@
   document.getElementById('open-cart').addEventListener('click', () => { renderCart(); document.getElementById('cart-dialog').showModal(); });
   document.getElementById('close-cart').addEventListener('click', () => document.getElementById('cart-dialog').close());
   document.getElementById('cart-destination-zip').addEventListener('input', resetShipping);
-  document.getElementById('cart-next').addEventListener('click', () => { if (!cart.length || !shippingChoice) return; window.openCheckoutPreview?.({items:cart.map(x=>({...x})),shipping:{...shippingChoice},destinationZip:document.getElementById('cart-destination-zip').value.replace(/\\D/g,'')}); });
+  document.getElementById('cart-next').addEventListener('click', () => { if (!cart.length || !shippingChoice) return; window.openCheckoutPreview?.({items:cart.map(x=>({...x})),shipping:{...shippingChoice},destinationZip:document.getElementById('cart-destination-zip').value.replace(/\D/g,'')}); });
   document.addEventListener('DOMContentLoaded', renderCart);
   window.addEventListener('pageshow', renderCart);
   window.refreshCart = renderCart;
