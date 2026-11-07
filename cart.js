@@ -92,7 +92,16 @@
     result.textContent = 'Consultando transportadoras…';
     try {
       const {data,error} = await db.functions.invoke('quote-shipping',{body:{product_id:p.id,destination_zip:zip}});
-      if (error || !Array.isArray(data?.quotes)) throw new Error('Cotação indisponível');
+      if (error) {
+        console.error('[Carrinho] Falha ao consultar quote-shipping:', error);
+        const context = error.context;
+        const status = context?.status;
+        throw new Error(status ? 'Falha HTTP ' + status + ' ao consultar o frete.' : 'Falha de comunicação com o serviço de frete.');
+      }
+      if (!Array.isArray(data?.quotes)) {
+        console.error('[Carrinho] Resposta inesperada de quote-shipping:', data);
+        throw new Error(data?.error || data?.message || 'O serviço retornou uma resposta sem opções de frete.');
+      }
       result.replaceChildren();
       if (!data.quotes.length) { result.textContent = 'Nenhuma opção de frete disponível para este CEP.'; return; }
       for (const quote of data.quotes) {
@@ -109,7 +118,7 @@
         };
         result.appendChild(button);
       }
-    } catch { result.textContent = 'Não foi possível consultar o frete. Tente novamente.'; }
+    } catch (err) { result.textContent = err?.message || 'Não foi possível consultar o frete. Tente novamente.'; }
   });
   document.getElementById('open-cart').addEventListener('click', () => { renderCart(); document.getElementById('cart-dialog').showModal(); });
   document.getElementById('close-cart').addEventListener('click', () => document.getElementById('cart-dialog').close());
