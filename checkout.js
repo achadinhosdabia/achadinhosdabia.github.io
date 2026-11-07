@@ -168,5 +168,67 @@
     if(!cpf.validity.valid)cpf.reportValidity();
   });
   field('customer_cpf').addEventListener('input',()=>field('customer_cpf').setCustomValidity(''));
+  // Teste explícito: valida no servidor, mas nunca cria pedido ou cobra.
+  const testButton=document.createElement('button');
+  testButton.type='button';
+  testButton.className='btn btn-ghost';
+  testButton.textContent='Testar dados da compra (sem criar pedido)';
+  testButton.style.marginBottom='12px';
+  const testNote=document.createElement('small');
+  testNote.textContent='Teste opcional: envia os dados preenchidos ao Supabase apenas para validação. Não cria pedido, não reserva estoque e não cobra.';
+  testNote.style.display='block';
+  testNote.style.marginBottom='12px';
+  const submit=form.querySelector('button[type="submit"]');
+  if(submit){submit.before(testButton);testButton.before(testNote);}
+  testButton.addEventListener('click',async()=>{
+    if(!checkoutSnapshot){setMessage('Volte ao carrinho e selecione o frete.');return;}
+    if(!form.reportValidity())return;
+    if(!cpfValid(field('customer_cpf').value)){
+      field('customer_cpf').setCustomValidity('Informe um CPF válido.');
+      field('customer_cpf').reportValidity();
+      return;
+    }
+    if(document.getElementById('checkout-review')?.dataset.validation!=='ok'){
+      setMessage('Aguarde a conferência dos produtos e do frete antes de testar.');
+      return;
+    }
+    const payment=form.querySelector('input[name="payment_method"]:checked')?.value;
+    if(!payment){setMessage('Selecione uma forma de pagamento.');return;}
+    const items=checkoutSnapshot.items.map(x=>({product_id:x.id,quantity:x.qty}));
+    const customer={
+      name:field('customer_name').value.trim(),
+      cpf:digits(field('customer_cpf').value),
+      email:field('customer_email').value.trim(),
+      phone:digits(field('customer_phone').value)
+    };
+    const address={
+      zip:digits(field('shipping_zip').value),
+      street:field('shipping_street').value.trim(),
+      number:field('shipping_number').value.trim(),
+      complement:field('shipping_complement').value.trim(),
+      neighborhood:field('shipping_neighborhood').value.trim(),
+      city:field('shipping_city').value.trim(),
+      state:field('shipping_state').value.trim().toUpperCase()
+    };
+    const shipping={company:checkoutSnapshot.shipping.company,service:checkoutSnapshot.shipping.service};
+    testButton.disabled=true;
+    setMessage('Executando simulação segura no servidor…');
+    try{
+      const {data,error}=await db.functions.invoke('checkout-validate',{
+        body:{items,customer,address,shipping,payment_method:payment}
+      });
+      if(error||data?.mode!=='dry_run'||data.can_create_order!==false){
+        throw new Error(data?.error||'O servidor não confirmou a simulação.');
+      }
+      const box=document.getElementById('checkout-review');
+      const total=box?.querySelector('p');
+      if(total)total.textContent='Simulação: produtos '+money(data.subtotal)+
+        ' | Frete '+money(data.shipping.price)+' | Total '+money(data.total);
+      setMessage('Simulação aprovada! Total: '+money(data.total)+
+        '. Nenhum pedido foi criado. A finalização continua desabilitada.');
+    }catch(err){
+      setMessage('Simulação não concluída: '+(err?.message||'verifique os dados e tente novamente.'));
+    }finally{testButton.disabled=false;}
+  });
   form.addEventListener('submit',event=>event.preventDefault());
 })();
