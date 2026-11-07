@@ -217,8 +217,19 @@
       const {data,error}=await db.functions.invoke('checkout-validate',{
         body:{items,customer,address,shipping,payment_method:payment}
       });
-      if(error||data?.mode!=='dry_run'||data.can_create_order!==false){
-        throw new Error(data?.error||'O servidor não confirmou a simulação.');
+      if(error){
+        let detail=data?.error||data?.message||'';
+        try{
+          if(error.context && typeof error.context.json==='function'){
+            const response=await error.context.json();
+            detail=response?.error||response?.message||detail;
+          }
+        }catch(_){}
+        throw new Error(detail||error.message||'Falha de comunicação com checkout-validate.');
+      }
+      if(data?.mode!=='dry_run'||data.can_create_order!==false){
+        throw new Error(data?.error||data?.message||
+          'Resposta inesperada da função checkout-validate. Verifique se a versão correta foi publicada.');
       }
       const box=document.getElementById('checkout-review');
       const total=box?.querySelector('p');
