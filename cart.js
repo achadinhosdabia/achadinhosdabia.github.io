@@ -43,7 +43,7 @@
       const p = getProduct(item.id);
       return `<div class="cart-line"><div class="cart-line-info"><strong>${escapeText(p.name)}</strong><small>${format(p.price)} cada · ${Math.floor(Number(p.stock))} em estoque</small></div><div class="cart-line-actions"><button type="button" data-cart-minus="${escapeText(item.id)}" aria-label="Diminuir quantidade">−</button><span>${item.qty}</span><button type="button" data-cart-plus="${escapeText(item.id)}" aria-label="Aumentar quantidade">+</button><button type="button" data-cart-remove="${escapeText(item.id)}" aria-label="Remover produto">Remover</button></div></div>`;
     }).join('') : '<p>Seu carrinho está vazio. Escolha seus achadinhos! 🌼</p>';
-    document.getElementById('cart-next').disabled = !valid.length;
+    document.getElementById('cart-next').disabled = !valid.length || !shippingChoice;
   }
   window.addToCart = id => {
     const p = getProduct(id);
@@ -111,7 +111,7 @@
         button.textContent = String(quote.company || 'Transportadora') + ' · ' + String(quote.service || 'Entrega') + ' — ' + shippingMoney(price) + ' · ' + String(quote.days ?? '?') + ' dias úteis';
         button.onclick = () => {
           result.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b === button)));
-          shippingChoice = {price};
+          shippingChoice = {price,company:String(quote.company||''),service:String(quote.service||''),days:quote.days};
           renderCart();
         };
         result.appendChild(button);
@@ -121,7 +121,7 @@
   document.getElementById('open-cart').addEventListener('click', () => { renderCart(); document.getElementById('cart-dialog').showModal(); });
   document.getElementById('close-cart').addEventListener('click', () => document.getElementById('cart-dialog').close());
   document.getElementById('cart-destination-zip').addEventListener('input', resetShipping);
-  document.getElementById('cart-next').addEventListener('click', () => toast('Estamos preparando o cálculo do frete e as formas de pagamento. Nenhum pedido foi realizado.'));
+  document.getElementById('cart-next').addEventListener('click', () => { if (!cart.length || !shippingChoice) return; window.openCheckoutPreview?.({items:cart.map(x=>({...x})),shipping:{...shippingChoice},destinationZip:document.getElementById('cart-destination-zip').value.replace(/\\D/g,'')}); });
   document.addEventListener('DOMContentLoaded', renderCart);
   window.addEventListener('pageshow', renderCart);
   window.refreshCart = renderCart;
