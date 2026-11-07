@@ -95,14 +95,38 @@
       if(total)total.textContent='Subtotal conferido: '+money(data.subtotal)+' | Frete estimado: '+money(shipping)+' | Total estimado: '+money(Number(data.subtotal)+shipping);
       const note=box.querySelector('small');
       if(note)note.textContent='Produtos e preços conferidos no Supabase. O frete ainda será validado pelo servidor antes do pedido.';
+      box.dataset.validation='products-ok';
+      setMessage('Produtos e preços conferidos. Revalidando o frete…');
+      const {data:freightData,error:freightError}=await db.functions.invoke('quote-shipping',{
+        body:{items,destination_zip:checkoutSnapshot.destinationZip}
+      });
+      if(current!==validationRequest)return;
+      if(freightError||!Array.isArray(freightData?.quotes))throw new Error('Não foi possível revalidar o frete.');
+      const normalize=x=>String(x??'').trim().toLocaleLowerCase('pt-BR');
+      const choice=checkoutSnapshot.shipping;
+      const matching=freightData.quotes.find(q=>
+        normalize(q.company)===normalize(choice.company)&&
+        normalize(q.service)===normalize(choice.service));
+      if(!matching||!Number.isFinite(Number(matching.price))||Number(matching.price)<0)
+        throw new Error('A opção de frete selecionada não está mais disponível.');
+      const newPrice=Number(matching.price);
+      const oldPrice=Number(choice.price);
+      const totalPrice=Number(data.subtotal)+newPrice;
+      if(total)total.textContent='Subtotal conferido: '+money(data.subtotal)+' | Frete recotado: '+money(newPrice)+' | Total estimado: '+money(totalPrice);
+      if(note)note.textContent='Produtos e frete consultados novamente no Supabase. O valor final será confirmado pelo servidor ao criar o pedido.';
       box.dataset.validation='ok';
-      setMessage('Produtos e preços conferidos! Confira o endereço. A finalização da compra ainda está em desenvolvimento.');
+      if(Math.abs(newPrice-oldPrice)>0.009){
+        setMessage('O frete mudou de '+money(oldPrice)+' para '+money(newPrice)+'. Volte ao carrinho e selecione novamente o frete antes de continuar.');
+        box.dataset.validation='shipping-changed';
+      }else{
+        setMessage('Produtos, preços e frete conferidos! A finalização da compra ainda está em desenvolvimento.');
+      }
     }catch(error){
       if(current!==validationRequest)return;
       box.dataset.validation='failed';
       const note=box.querySelector('small');
       if(note)note.textContent='Não foi possível confirmar os produtos no servidor. Os valores acima são apenas estimativas.';
-      setMessage('Não foi possível validar o carrinho no Supabase. Tente novamente mais tarde.');
+      setMessage(error?.message || 'Não foi possível validar o carrinho e o frete no Supabase. Tente novamente mais tarde.');
     }
   }
   const money=value=>Number(value).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
