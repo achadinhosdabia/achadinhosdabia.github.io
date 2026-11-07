@@ -6,7 +6,7 @@
   const close=()=>dialog.close();
   document.getElementById('checkout-close').addEventListener('click',close);
   window.openCheckoutPreview=({items,shipping,destinationZip})=>{
-    if(!items?.length||!shipping||!/^\\d{8}$/.test(destinationZip))return;
+    if(!items?.length||!shipping||!/^\d{8}$/.test(destinationZip))return;
     form.elements.shipping_zip.value=destinationZip;
     document.getElementById('cart-dialog').close();
     dialog.showModal();
