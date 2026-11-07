@@ -83,15 +83,12 @@
     renderCart();
     if (!cart.length) { result.textContent = 'Adicione produtos ao carrinho.'; return; }
     if (!db) { result.textContent = 'Conexão com o Supabase indisponível.'; return; }
-    if (cart.length !== 1 || cart[0].qty !== 1) {
-      result.textContent = 'A cotação conjunta de vários itens ainda está sendo preparada. Não somaremos fretes individuais, pois isso pode gerar valores incorretos.';
-      return;
-    }
-    const p = getProduct(cart[0].id);
-    if (!p?.shipping_enabled) { result.textContent = 'Este produto não possui cotação automática. Combine a entrega com a loja.'; return; }
+    if (cart.some(item => !getProduct(item.id)?.shipping_enabled)) { result.textContent = 'Há produtos sem frete automático. Combine a entrega com a loja.'; return; }
+    const requestedCart = cart.map(item => ({product_id:item.id,quantity:item.qty}));
+    const cartSnapshot = JSON.stringify(requestedCart);
     result.textContent = 'Consultando transportadoras…';
     try {
-      const {data,error} = await db.functions.invoke('quote-shipping',{body:{product_id:p.id,destination_zip:zip}});
+      const {data,error} = await db.functions.invoke('quote-shipping',{body:{items:requestedCart,destination_zip:zip}});
       if (error) {
         console.error('[Carrinho] Falha ao consultar quote-shipping:', error);
         const context = error.context;
@@ -102,6 +99,7 @@
         console.error('[Carrinho] Resposta inesperada de quote-shipping:', data);
         throw new Error(data?.error || data?.message || 'O serviço retornou uma resposta sem opções de frete.');
       }
+      if (JSON.stringify(cart.map(item => ({product_id:item.id,quantity:item.qty}))) !== cartSnapshot || document.getElementById('cart-destination-zip').value.replace(/\D/g,'') !== zip) return;
       result.replaceChildren();
       if (!data.quotes.length) { result.textContent = 'Nenhuma opção de frete disponível para este CEP.'; return; }
       for (const quote of data.quotes) {
