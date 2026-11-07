@@ -23,7 +23,7 @@ function details(p){if(!p)return;window.currentShippingProduct=p;const colors=(p
 function notifyAdmin(s){$('admin-message').textContent=s;$('admin-message').hidden=false}
 async function refresh(){if(!db)return;const{data,error}=await db.from('products').select('*').order('created_at',{ascending:false});if(error){toast('Não foi possível carregar os produtos.');return}products=data||[];render();renderAdmin();window.refreshCart?.()}
 function renderAdmin(){if(!session)return;$('admin-products').innerHTML=products.map(p=>`<div class="admin-product"><span><b>${esc(p.name)}</b><br>${money(p.price)} · ${p.stock} em estoque · ${p.active?'Publicado':'Oculto'}</span><span><button data-edit="${esc(p.id)}">Editar</button><button class="danger" data-delete="${esc(p.id)}">Excluir</button></span></div>`).join('')}
-function showPanel(user){session=user;$('login-form').hidden=!!user;$('admin-panel').hidden=!user;$('admin-message').hidden=true;renderAdmin()}
+function showPanel(user){session=user;$('login-form').hidden=!!user;$('admin-panel').hidden=!user;$('admin-message').hidden=true;renderAdmin();if(user)window.refreshOrders?.();else window.clearOrders?.()}
 // A autorização OAuth é iniciada apenas por um administrador autenticado.
 const connectShippingButton=document.createElement('button');
 connectShippingButton.type='button';
