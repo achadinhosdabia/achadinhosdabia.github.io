@@ -101,7 +101,7 @@
       }
       if (JSON.stringify(cart.map(item => ({product_id:item.id,quantity:item.qty}))) !== cartSnapshot || document.getElementById('cart-destination-zip').value.replace(/\D/g,'') !== zip) return;
       result.replaceChildren();
-      if (!data.quotes.length) { result.textContent = 'Nenhuma opção de frete disponível para este CEP.'; return; }
+      if (!data.quotes.length) { result.textContent = data.message || 'Nenhuma opção de frete disponível para este CEP.'; return; }
       for (const quote of data.quotes) {
         const price = Number(quote.price);
         if (!Number.isFinite(price) || price < 0) continue;
