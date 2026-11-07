@@ -6,7 +6,7 @@
   const field=name=>form.elements.namedItem(name);
   const message=document.getElementById('checkout-message');
   const zip=field('shipping_zip');
-  let lastZip='',requestId=0,checkoutSnapshot=null;
+  let lastZip='',requestId=0,checkoutSnapshot=null,validationRequest=0;
   const setMessage=(text)=>{message.textContent=text;};
   const digits=value=>String(value||'').replace(/\D/g,'');
   const clearAddress=()=>{
@@ -60,11 +60,55 @@
     dialog.showModal();
     lookupZip();
     renderReview();
+    validateServerPreview();
   };
+  async function validateServerPreview(){
+    const current=++validationRequest;
+    const box=document.getElementById('checkout-review');
+    if(!checkoutSnapshot||!box)return;
+    const items=checkoutSnapshot.items.map(x=>({product_id:x.id,quantity:x.qty}));
+    if(typeof db==='undefined'||!db||items.some(x=>!/^[-0-9a-f]{36}$/i.test(x.product_id))){
+      box.dataset.validation='unavailable';
+      setMessage('Não foi possível validar os produtos no servidor. Nenhum pedido será criado.');
+      return;
+    }
+    box.dataset.validation='checking';
+    setMessage('Conferindo produtos e preços no Supabase…');
+    try{
+      const {data,error}=await db.functions.invoke('checkout-preview',{body:{items}});
+      if(current!==validationRequest)return;
+      if(error||data?.mode!=='preview_only'||!Array.isArray(data.items)||data.items.length!==items.length){
+        throw new Error(data?.error||'Falha na validação do catálogo');
+      }
+      const shipping=Number(checkoutSnapshot.shipping.price);
+      if(!Number.isFinite(shipping)||shipping<0)throw new Error('Frete inválido');
+      const list=box.querySelector('ul');
+      if(list){
+        list.replaceChildren();
+        for(const item of data.items){
+          const li=document.createElement('li');
+          li.textContent=item.quantity+' × '+item.name+' — '+money(item.line_total);
+          list.appendChild(li);
+        }
+      }
+      const total=box.querySelector('p');
+      if(total)total.textContent='Subtotal conferido: '+money(data.subtotal)+' | Frete estimado: '+money(shipping)+' | Total estimado: '+money(Number(data.subtotal)+shipping);
+      const note=box.querySelector('small');
+      if(note)note.textContent='Produtos e preços conferidos no Supabase. O frete ainda será validado pelo servidor antes do pedido.';
+      box.dataset.validation='ok';
+      setMessage('Produtos e preços conferidos! Confira o endereço. A finalização da compra ainda está em desenvolvimento.');
+    }catch(error){
+      if(current!==validationRequest)return;
+      box.dataset.validation='failed';
+      const note=box.querySelector('small');
+      if(note)note.textContent='Não foi possível confirmar os produtos no servidor. Os valores acima são apenas estimativas.';
+      setMessage('Não foi possível validar o carrinho no Supabase. Tente novamente mais tarde.');
+    }
+  }
   const money=value=>Number(value).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
   const cpfValid=value=>{
     const cpf=digits(value);
-    if(!/^\\d{11}$/.test(cpf)||/^(\\d)\\1{10}$/.test(cpf))return false;
+    if(!/^\d{11}$/.test(cpf)||/^(\d)\1{10}$/.test(cpf))return false;
     for(let size=9;size<11;size++){
       let sum=0;
       for(let i=0;i<size;i++)sum+=Number(cpf[i])*(size+1-i);
