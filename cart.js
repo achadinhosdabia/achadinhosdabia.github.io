@@ -78,8 +78,8 @@
     event.preventDefault();
     resetShipping();
     const result = document.getElementById('cart-shipping-results');
-    const zip = document.getElementById('cart-destination-zip').value.replace(/\\D/g,'');
-    if (!/^\\d{8}$/.test(zip)) { result.textContent = 'Informe um CEP de 8 números.'; return; }
+    const zip = document.getElementById('cart-destination-zip').value.replace(/\D/g,'');
+    if (!/^\d{8}$/.test(zip)) { result.textContent = 'Informe um CEP de 8 números.'; return; }
     renderCart();
     if (!cart.length) { result.textContent = 'Adicione produtos ao carrinho.'; return; }
     if (!db) { result.textContent = 'Conexão com o Supabase indisponível.'; return; }
