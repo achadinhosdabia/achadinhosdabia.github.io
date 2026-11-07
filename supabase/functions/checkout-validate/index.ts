@@ -63,7 +63,14 @@ Deno.serve(async (req) => {
         body: JSON.stringify(payload),
       });
       const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.error || 'Falha ao consultar ' + fn);
+      if (!res.ok) {
+        // Não expor tokens nem o corpo completo da resposta ao cliente.
+        const reason = typeof data?.error === 'string' ? data.error.slice(0, 180)
+          : typeof data?.message === 'string' ? data.message.slice(0, 180)
+          : 'resposta sem detalhes';
+        console.error('Falha na função interna', { function: fn, status: res.status, reason });
+        throw new Error('Falha ao consultar ' + fn + ' (HTTP ' + res.status + '): ' + reason);
+      }
       return data;
     };
     const [catalog, freight] = await Promise.all([
