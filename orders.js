@@ -32,6 +32,38 @@
     }).join('');
   }
   $('orders-list').addEventListener('click', async event => {
+    const button = event.target.closest('[data-cancel-order]');
+    if (!button) return;
+    const order = orders.find(o => o.id === button.dataset.cancelOrder);
+    if (!order || order.order_status !== 'pending_payment' || order.payment_status !== 'pending') return;
+    if (!window.confirm('Cancelar o pedido #' + order.order_number + ' e devolver o estoque reservado? Esta ação não pode ser desfeita.')) return;
+    button.disabled = true;
+    button.textContent = 'Cancelando…';
+    try {
+      const client = window.getAdminSupabaseClient?.();
+      if (!client) throw new Error('Faça login como administrador.');
+      const { data: auth } = await client.auth.getSession();
+      if (!auth?.session?.access_token) throw new Error('Sessão expirada. Entre novamente.');
+      const base = (window.SUPABASE_URL || window.supabaseUrl || '').replace(/\\/$/, '');
+      const endpoint = base || (typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : '');
+      if (!endpoint) throw new Error('Endereço do Supabase não configurado.');
+      const response = await fetch(endpoint + '/functions/v1/admin-cancel-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + auth.session.access_token,
+          'apikey': (window.SUPABASE_ANON_KEY || (typeof SUPABASE_ANON_KEY !== 'undefined' ? SUPABASE_ANON_KEY : '')) },
+        body: JSON.stringify({order_id: order.id, confirm: true}),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Não foi possível cancelar.');
+      $('orders-message').textContent = 'Pedido #' + order.order_number + ' cancelado. Estoque liberado.';
+      await load();
+    } catch (error) {
+      button.disabled = false;
+      button.textContent = 'Cancelar pedido e devolver estoque';
+      $('orders-message').textContent = error.message || 'Erro ao cancelar.';
+    }
+  });
+  $('orders-list').addEventListener('click', async event => {
     const button = event.target.closest('[data-copy-order]');
     if (!button) return;
     const order = orders.find(o => o.id === button.dataset.copyOrder);
