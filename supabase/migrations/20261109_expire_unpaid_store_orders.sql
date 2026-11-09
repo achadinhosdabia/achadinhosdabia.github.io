@@ -33,6 +33,7 @@ BEGIN
        AND payment_status = 'pending'
        AND order_status = 'pending_payment';
     IF FOUND THEN
+      -- O bloqueio do pedido deve ser respeitado também pela confirmação de pagamento.
       PERFORM public.release_order_stock(rec.id);
       INSERT INTO public.order_status_history (
         order_id, previous_status, new_status, notes
