@@ -3,14 +3,21 @@
 // Não cria cobrança no Mercado Pago nem etiqueta no Melhor Envio.
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
-const headers = {
-  'Access-Control-Allow-Origin': 'https://achadinhosdabia.github.io',
+const allowedOrigins = new Set([
+  'https://achadinhosdabia.github.io',
+  'http://localhost:8000',
+  'http://127.0.0.1:8000',
+]);
+const headersFor = (req: Request) => ({
+  'Access-Control-Allow-Origin': allowedOrigins.has(req.headers.get('origin') || '')
+    ? req.headers.get('origin')! : 'https://achadinhosdabia.github.io',
+  'Vary': 'Origin',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Content-Type': 'application/json; charset=utf-8',
   'Cache-Control': 'no-store',
-};
-const respond = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers });
+});
+const respond = (req: Request, status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: headersFor(req) });
 const digits = (v: unknown) => String(v ?? '').replace(/\D/g, '');
 const normalize = (v: unknown) => String(v ?? '').trim().toLocaleLowerCase('pt-BR');
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -25,20 +32,20 @@ const cpfValid = (value: unknown) => {
   return true;
 };
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers });
-  if (req.method !== 'POST') return respond(405, { error: 'Método não permitido.' });
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: headersFor(req) });
+  if (req.method !== 'POST') return respond(req, 405, { error: 'Método não permitido.' });
   // Proteção contra ativação acidental, mesmo se a função for publicada.
   if (Deno.env.get('CHECKOUT_ORDER_CREATION_ENABLED') !== 'true')
-    return respond(503, { error: 'Criação de pedidos ainda desabilitada para testes.' });
+    return respond(req, 503, { error: 'Criação de pedidos ainda desabilitada para testes.' });
   const origin = req.headers.get('origin');
   if (origin !== 'https://achadinhosdabia.github.io' &&
       origin !== 'http://localhost:8000' && origin !== 'http://127.0.0.1:8000')
-    return respond(403, { error: 'Origem não autorizada.' });
+    return respond(req, 403, { error: 'Origem não autorizada.' });
   try {
     const body = await req.json();
     const requestKey = body?.request_key;
     if (typeof requestKey !== 'string' || !uuid.test(requestKey))
-      return respond(400, { error: 'Identificador único da compra obrigatório.' });
+      return respond(req, 400, { error: 'Identificador único da compra obrigatório.' });
     const items = body?.items;
     const customer = body?.customer;
     const address = body?.address;
@@ -47,7 +54,7 @@ Deno.serve(async (req) => {
         items.some((x: { product_id?: unknown; quantity?: unknown }) =>
           typeof x?.product_id !== 'string' || !uuid.test(x.product_id) ||
           !Number.isSafeInteger(x.quantity) || Number(x.quantity) < 1 || Number(x.quantity) > 100))
-      return respond(400, { error: 'Itens inválidos.' });
+      return respond(req, 400, { error: 'Itens inválidos.' });
     const grouped = new Map<string, number>();
     for (const x of items) {
       const id = x.product_id.toLowerCase();
@@ -55,29 +62,29 @@ Deno.serve(async (req) => {
     }
     if ([...grouped.values()].some((qty) => qty > 100) ||
         [...grouped.values()].reduce((a, b) => a + b, 0) > 100)
-      return respond(400, { error: 'Quantidade excedida.' });
+      return respond(req, 400, { error: 'Quantidade excedida.' });
     if (!customer || typeof customer.name !== 'string' || customer.name.trim().length < 3 ||
         typeof customer.email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customer.email) ||
         digits(customer.phone).length < 10 || !cpfValid(customer.cpf))
-      return respond(400, { error: 'Dados do cliente inválidos.' });
+      return respond(req, 400, { error: 'Dados do cliente inválidos.' });
     if (!address || digits(address.zip).length !== 8 ||
         String(address.street ?? '').trim().length < 2 ||
         String(address.number ?? '').trim().length < 1 ||
         String(address.neighborhood ?? '').trim().length < 2 ||
         String(address.city ?? '').trim().length < 2 ||
         !/^[A-Z]{2}$/.test(String(address.state ?? '').toUpperCase()))
-      return respond(400, { error: 'Endereço incompleto.' });
+      return respond(req, 400, { error: 'Endereço incompleto.' });
     if (!shipping || !String(shipping.company ?? '').trim() || !String(shipping.service ?? '').trim())
-      return respond(400, { error: 'Frete não selecionado.' });
+      return respond(req, 400, { error: 'Frete não selecionado.' });
     if (!['mercado_pago', 'pix_whatsapp'].includes(body.payment_method))
-      return respond(400, { error: 'Pagamento inválido.' });
+      return respond(req, 400, { error: 'Pagamento inválido.' });
 
     const url = Deno.env.get('SUPABASE_URL');
     const anon = Deno.env.get('SUPABASE_ANON_KEY');
     const service = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     const secret = Deno.env.get('CHECKOUT_INTERNAL_SECRET') || '';
     if (!url || !anon || !service || secret.length < 32)
-      return respond(503, { error: 'Checkout não configurado.' });
+      return respond(req, 503, { error: 'Checkout não configurado.' });
     const invoke = async (name: string, payload: unknown) => {
       const res = await fetch(url + '/functions/v1/' + name, {
         method: 'POST',
@@ -100,13 +107,13 @@ Deno.serve(async (req) => {
     ]);
     if (catalog?.mode !== 'preview_only' || !Array.isArray(catalog.items) ||
         catalog.items.length !== normalizedItems.length || !Array.isArray(freight?.quotes))
-      return respond(409, { error: 'Produtos ou frete indisponíveis.' });
+      return respond(req, 409, { error: 'Produtos ou frete indisponíveis.' });
     const selected = freight.quotes.find((q: { company?: unknown; service?: unknown }) =>
       normalize(q.company) === normalize(shipping.company) &&
       normalize(q.service) === normalize(shipping.service));
     const price = Number(selected?.price);
     if (!selected || !Number.isFinite(price) || price < 0)
-      return respond(409, { error: 'Frete alterado ou indisponível. Refaça a cotação.' });
+      return respond(req, 409, { error: 'Frete alterado ou indisponível. Refaça a cotação.' });
 
     // O RPC relê preços, trava produtos e reserva estoque atomicamente.
     // Não aceitar preços ou total fornecidos pelo navegador.
@@ -131,12 +138,12 @@ Deno.serve(async (req) => {
     });
     if (error) {
       console.error('Falha no RPC create_store_order', error.code);
-      return respond(409, { error: 'Não foi possível reservar o estoque e criar o pedido. Confira o carrinho.' });
+      return respond(req, 409, { error: 'Não foi possível reservar o estoque e criar o pedido. Confira o carrinho.' });
     }
-    return respond(201, { mode: 'sandbox_order', order: data,
+    return respond(req, 201, { mode: 'sandbox_order', order: data,
       message: 'Pedido registrado sem iniciar cobrança ou compra de frete.' });
   } catch (err) {
     console.error('Falha de checkout', err instanceof Error ? err.message : 'erro desconhecido');
-    return respond(503, { error: 'Não foi possível finalizar o pedido neste momento.' });
+    return respond(req, 503, { error: 'Não foi possível finalizar o pedido neste momento.' });
   }
 });
