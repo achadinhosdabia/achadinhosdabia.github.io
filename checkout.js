@@ -284,7 +284,57 @@
       payment_method:payment
     };
   }
-  // Estrutura pronta para a futura integração; não expõe chamada de criação.
-  void buildOrderPayload;
+  // Ferramenta de homologação: apenas localhost e administrador autenticado.
+  // A Edge Function ainda aplica sua própria autenticação e chave de bloqueio.
+  if(['localhost','127.0.0.1'].includes(location.hostname)){
+    const createTestButton=document.createElement('button');
+    createTestButton.type='button';
+    createTestButton.className='btn btn-ghost';
+    createTestButton.textContent='Criar pedido de teste (administrador)';
+    createTestButton.style.marginTop='12px';
+    const createTestInfo=document.createElement('small');
+    createTestInfo.style.display='block';
+    createTestInfo.textContent='Apenas homologação local. Se a criação for habilitada no Supabase, este teste registra um pedido e reserva estoque REAL. Não realiza cobrança.';
+    createNote.after(createTestButton,createTestInfo);
+    let createdOrder=null;
+    createTestButton.addEventListener('click',async()=>{
+      if(createdOrder){
+        setMessage('Pedido de teste já criado nesta tentativa: nº '+createdOrder+'. Consulte o painel administrativo.');
+        return;
+      }
+      if(!form.reportValidity()||!cpfValid(field('customer_cpf').value)){
+        setMessage('Confira os dados do cliente, inclusive o CPF.');
+        return;
+      }
+      if(document.getElementById('checkout-review')?.dataset.validation!=='ok'){
+        setMessage('Aguarde a validação dos produtos e do frete.');
+        return;
+      }
+      const client=window.getAdminSupabaseClient?.();
+      if(!client){setMessage('Faça login como administrador antes de testar.');return;}
+      const {data:{session},error:sessionError}=await client.auth.getSession();
+      if(sessionError||!session){setMessage('Faça login como administrador antes de testar.');return;}
+      const payload=buildOrderPayload();
+      if(!payload?.payment_method){setMessage('Escolha uma forma de pagamento.');return;}
+      if(!confirm('ATENÇÃO: se o Supabase estiver habilitado, esta ação criará um pedido e reservará estoque REAL, sem cobrar. Deseja continuar?'))return;
+      createTestButton.disabled=true;
+      setMessage('Enviando pedido de teste ao servidor…');
+      try{
+        const {data,error}=await client.functions.invoke('checkout-create-order',{body:payload});
+        if(error){
+          let detail=error.message;
+          try{detail=(await error.context?.json())?.error||detail;}catch(_){}
+          throw new Error(detail);
+        }
+        if(data?.mode!=='sandbox_order'||!data?.order?.order_number)
+          throw new Error('Resposta inesperada da criação de pedidos.');
+        createdOrder=data.order.order_number;
+        setMessage('Pedido de teste nº '+createdOrder+' registrado! Confira o painel de pedidos. Nenhuma cobrança foi iniciada.');
+      }catch(error){
+        setMessage('Pedido não confirmado: '+(error?.message||'Falha desconhecida')+'. Se houve falha de rede, confira os pedidos antes de tentar novamente.');
+        createTestButton.disabled=false;
+      }
+    });
+  }
   form.addEventListener('submit',event=>event.preventDefault());
 })();
