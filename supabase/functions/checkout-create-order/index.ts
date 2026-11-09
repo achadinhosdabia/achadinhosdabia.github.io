@@ -36,6 +36,9 @@ Deno.serve(async (req) => {
     return respond(403, { error: 'Origem não autorizada.' });
   try {
     const body = await req.json();
+    const requestKey = body?.request_key;
+    if (typeof requestKey !== 'string' || !uuid.test(requestKey))
+      return respond(400, { error: 'Identificador único da compra obrigatório.' });
     const items = body?.items;
     const customer = body?.customer;
     const address = body?.address;
@@ -108,7 +111,8 @@ Deno.serve(async (req) => {
     // O RPC relê preços, trava produtos e reserva estoque atomicamente.
     // Não aceitar preços ou total fornecidos pelo navegador.
     const db = createClient(url, service, { auth: { persistSession: false } });
-    const { data, error } = await db.rpc('create_store_order', {
+    const { data, error } = await db.rpc('create_store_order_idempotent', {
+      p_request_key: requestKey,
       p_customer: {
         name: customer.name.trim(), email: customer.email.trim(),
         phone: digits(customer.phone), cpf: digits(customer.cpf),
