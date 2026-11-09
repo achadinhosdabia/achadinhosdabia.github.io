@@ -22,11 +22,12 @@ BEGIN
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Pedido não encontrado';
   END IF;
-  IF v_order.payment_status = 'approved' THEN
+  IF v_order.payment_status = 'approved' AND v_order.order_status = 'paid' THEN
     RETURN false; -- Já confirmado; não gerar histórico duplicado.
   END IF;
   IF v_order.payment_status <> 'pending'
      OR v_order.order_status <> 'pending_payment'
+     OR v_order.payment_expires_at IS NULL
      OR v_order.payment_expires_at <= pg_catalog.now() THEN
     RAISE EXCEPTION 'Pedido não está pendente ou já venceu';
   END IF;
