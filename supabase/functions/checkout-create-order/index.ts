@@ -88,7 +88,7 @@ Deno.serve(async (req) => {
     // TESTE RESTRITO: validar o JWT do operador e sua associação em admins.
     // Não confiar no user_id enviado pelo navegador ou em checagem só no frontend.
     const authorization = req.headers.get('authorization') || '';
-    const token = /^Bearer\\s+(.+)$/i.exec(authorization)?.[1];
+    const token = /^Bearer\s+(.+)$/i.exec(authorization)?.[1];
     if (!token) return respond(req, 401, { error: 'Faça login como administrador para testar.' });
     const userClient = createClient(url, anon, {
       global: { headers: { Authorization: 'Bearer ' + token } },
