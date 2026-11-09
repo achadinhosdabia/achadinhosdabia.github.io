@@ -245,5 +245,46 @@
       setMessage('Simulação não concluída: '+(err?.message||'verifique os dados e tente novamente.'));
     }finally{testButton.disabled=false;}
   });
+  // Pré-integração segura: prepara o pedido, mas não chama a função de criação.
+  // A ativação exige uma etapa posterior e autorização explícita.
+  const createNote=document.createElement('small');
+  createNote.style.display='block';
+  createNote.style.marginTop='8px';
+  createNote.textContent='Criação de pedidos ainda bloqueada. A simulação acima não altera o estoque.';
+  if(submit){
+    submit.disabled=true;
+    submit.setAttribute('aria-disabled','true');
+    submit.after(createNote);
+  }
+  function buildOrderPayload(){
+    if(!checkoutSnapshot||!checkoutRequestKey)return null;
+    const payment=form.querySelector('input[name="payment_method"]:checked')?.value;
+    return {
+      request_key:checkoutRequestKey,
+      items:checkoutSnapshot.items.map(x=>({product_id:x.id,quantity:x.qty})),
+      customer:{
+        name:field('customer_name').value.trim(),
+        cpf:digits(field('customer_cpf').value),
+        email:field('customer_email').value.trim(),
+        phone:digits(field('customer_phone').value)
+      },
+      address:{
+        zip:digits(field('shipping_zip').value),
+        street:field('shipping_street').value.trim(),
+        number:field('shipping_number').value.trim(),
+        complement:field('shipping_complement').value.trim(),
+        neighborhood:field('shipping_neighborhood').value.trim(),
+        city:field('shipping_city').value.trim(),
+        state:field('shipping_state').value.trim().toUpperCase()
+      },
+      shipping:{
+        company:checkoutSnapshot.shipping.company,
+        service:checkoutSnapshot.shipping.service
+      },
+      payment_method:payment
+    };
+  }
+  // Estrutura pronta para a futura integração; não expõe chamada de criação.
+  void buildOrderPayload;
   form.addEventListener('submit',event=>event.preventDefault());
 })();
