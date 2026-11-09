@@ -22,7 +22,7 @@ BEGIN
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Pedido não encontrado';
   END IF;
-  IF v_order.payment_status = 'paid' THEN
+  IF v_order.payment_status = 'approved' THEN
     RETURN false; -- Já confirmado; não gerar histórico duplicado.
   END IF;
   IF v_order.payment_status <> 'pending'
@@ -32,13 +32,13 @@ BEGIN
   END IF;
   -- Confirmação é decisão de um operador/serviço autorizado, após verificar o pagamento.
   UPDATE public.orders
-     SET payment_status = 'paid',
-         order_status = 'payment_confirmed'
+     SET payment_status = 'approved',
+         order_status = 'paid'
    WHERE id = p_order_id;
   INSERT INTO public.order_status_history (
     order_id, previous_status, new_status, notes
   ) VALUES (
-    p_order_id, 'pending_payment', 'payment_confirmed',
+    p_order_id, 'pending_payment', 'paid',
     'Pagamento confirmado por operador/serviço autorizado'
   );
   RETURN true;
