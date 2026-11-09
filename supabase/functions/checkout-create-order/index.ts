@@ -154,8 +154,17 @@ Deno.serve(async (req) => {
       p_payment_method: body.payment_method,
     });
     if (error) {
-      console.error('Falha no RPC create_store_order', error.code);
-      return respond(req, 409, { error: 'Não foi possível reservar o estoque e criar o pedido. Confira o carrinho.' });
+      // Registrar o erro real apenas no servidor; nunca expor SQL ou dados pessoais ao navegador.
+      console.error('Falha no RPC create_store_order_idempotent', {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+      });
+      return respond(req, 409, {
+        error: 'Não foi possível reservar o estoque e criar o pedido. Confira o carrinho.',
+        diagnostic_code: error.code || 'RPC_UNKNOWN',
+      });
     }
     return respond(req, 201, { mode: 'sandbox_order', order: data,
       message: 'Pedido registrado sem iniciar cobrança ou compra de frete.' });
