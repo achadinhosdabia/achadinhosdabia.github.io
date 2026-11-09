@@ -44,7 +44,7 @@
       if (!client) throw new Error('Faça login como administrador.');
       const { data: auth } = await client.auth.getSession();
       if (!auth?.session?.access_token) throw new Error('Sessão expirada. Entre novamente.');
-      const endpoint = String(window.STORE_CONFIG?.supabaseUrl || '').replace(/\\/$/, '');
+      const endpoint = String(window.STORE_CONFIG?.supabaseUrl || '').replace(/\/$/, '');
       if (!endpoint) throw new Error('Endereço do Supabase não configurado.');
       const response = await fetch(endpoint + '/functions/v1/admin-cancel-order', {
         method: 'POST',
@@ -69,7 +69,7 @@
     if (!order) return;
     const address = [order.shipping_street,order.shipping_number,order.shipping_complement,order.shipping_neighborhood,order.shipping_city,order.shipping_state,order.shipping_zip].filter(Boolean).join(', ');
     const lines = ['Pedido #' + order.order_number, 'Cliente: ' + order.customer_name, 'Status: ' + (statuses[order.order_status] || order.order_status), 'Pagamento: ' + (paymentStatuses[order.payment_status] || order.payment_status), ...((order.order_items || []).map(i => i.quantity + ' × ' + i.product_name + ' — ' + money(i.line_total))), 'Subtotal: ' + money(order.subtotal), 'Frete: ' + money(order.shipping_price), 'Total: ' + money(order.total), 'Endereço: ' + address];
-    try { await navigator.clipboard.writeText(lines.join('\\n')); button.textContent = 'Resumo copiado!'; }
+    try { await navigator.clipboard.writeText(lines.join('\n')); button.textContent = 'Resumo copiado!'; }
     catch (_) { button.textContent = 'Não foi possível copiar'; }
   });
   async function load() {
