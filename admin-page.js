@@ -12,6 +12,50 @@
     products: () => [document.querySelector('.admin-toolbar'),document.getElementById('admin-products'),document.getElementById('product-form'),document.getElementById('gallery-admin'),document.querySelector('.shipping-connection')],
     settings: () => [document.querySelector('.store-settings')]
   };
+
+  // Diagnóstico somente-leitura; visível apenas no painel autenticado.
+  const accessTest = document.createElement('div');
+  accessTest.style.cssText = 'margin:16px 0;padding:16px;border:1px solid #e6d7e6;border-radius:14px';
+  const accessTitle = document.createElement('strong');
+  accessTitle.textContent = 'Verificação de acesso administrativo';
+  const accessInfo = document.createElement('p');
+  accessInfo.textContent = 'Confira se este login tem acesso de administrador, sem alterar pedidos ou estoque.';
+  const accessButton = document.createElement('button');
+  accessButton.type = 'button';
+  accessButton.className = 'btn btn-ghost';
+  accessButton.textContent = 'Verificar meu acesso';
+  const accessResult = document.createElement('p');
+  accessResult.setAttribute('role', 'status');
+  accessResult.setAttribute('aria-live', 'polite');
+  accessTest.append(accessTitle, accessInfo, accessButton, accessResult);
+  document.getElementById('admin-overview')?.append(accessTest);
+  accessButton.addEventListener('click', async () => {
+    accessButton.disabled = true;
+    accessResult.textContent = 'Verificando…';
+    try {
+      const config = window.STORE_CONFIG;
+      if (!config?.supabaseUrl || !config?.supabaseAnonKey || !window.supabase)
+        throw new Error('Configuração do Supabase não encontrada.');
+      const client = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
+      const { data: { session }, error: sessionError } = await client.auth.getSession();
+      if (sessionError || !session?.access_token)
+        throw new Error('Faça login novamente no painel.');
+      const { data, error } = await client.functions.invoke('check-admin-access', { body: {} });
+      if (error) {
+        const response = error.context;
+        const payload = response && typeof response.json === 'function'
+          ? await response.json().catch(() => null) : null;
+        throw new Error(payload?.error || error.message || 'Verificação indisponível.');
+      }
+      accessResult.textContent = data?.admin === true
+        ? '✓ Acesso administrativo confirmado para esta conta.'
+        : 'Acesso administrativo não confirmado.';
+    } catch (error) {
+      accessResult.textContent = 'Não foi possível verificar: ' + (error?.message || 'tente novamente.');
+    } finally {
+      accessButton.disabled = false;
+    }
+  });
   let selected = 'overview';
   function show(tab) {
     selected = sections[tab] ? tab : 'overview';
