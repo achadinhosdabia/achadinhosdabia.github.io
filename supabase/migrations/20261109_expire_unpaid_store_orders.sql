@@ -25,7 +25,7 @@ BEGIN
      FOR UPDATE SKIP LOCKED
   LOOP
     UPDATE public.orders
-       SET payment_status = 'expired',
+       SET payment_status = 'cancelled',
            order_status = 'cancelled',
            cancelled_at = pg_catalog.now(),
            cancellation_reason = 'Prazo de pagamento de 3 horas encerrado'
