@@ -24,7 +24,7 @@ BEGIN
     order_status = 'cancelled',
     payment_status = 'cancelled',
     cancelled_at = pg_catalog.now(),
-    cancellation_reason = pg_catalog.left(pg_catalog.coalesce(pg_catalog.nullif(pg_catalog.btrim(p_reason), ''), 'Cancelamento administrativo'), 250)
+    cancellation_reason = pg_catalog.left(COALESCE(NULLIF(pg_catalog.btrim(p_reason), ''), 'Cancelamento administrativo'), 250)
   WHERE id = p_order_id;
   SELECT public.release_order_stock(p_order_id) INTO v_released;
   INSERT INTO public.order_status_history(order_id, previous_status, new_status, notes)
