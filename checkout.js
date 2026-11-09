@@ -329,7 +329,20 @@
         if(data?.mode!=='sandbox_order'||!data?.order?.order_number)
           throw new Error('Resposta inesperada da criação de pedidos.');
         createdOrder=data.order.order_number;
-        setMessage('Pedido de teste nº '+createdOrder+' registrado! Confira o painel de pedidos. Nenhuma cobrança foi iniciada.');
+        setMessage('Pedido de teste nº '+createdOrder+' registrado! Nenhuma cobrança foi iniciada.');
+        createTestButton.textContent='Pedido nº '+createdOrder+' criado';
+        createTestButton.disabled=true;
+        let ordersLink=document.getElementById('checkout-test-orders-link');
+        if(!ordersLink){
+          ordersLink=document.createElement('a');
+          ordersLink.id='checkout-test-orders-link';
+          ordersLink.href='admin.html';
+          ordersLink.className='btn btn-ghost';
+          ordersLink.textContent='Abrir painel para acompanhar o pedido';
+          ordersLink.style.display='inline-block';
+          ordersLink.style.marginTop='12px';
+          createTestInfo.after(ordersLink);
+        }
       }catch(error){
         setMessage('Pedido não confirmado: '+(error?.message||'Falha desconhecida')+'. Se houve falha de rede, confira os pedidos antes de tentar novamente.');
         createTestButton.disabled=false;
