@@ -85,6 +85,23 @@ Deno.serve(async (req) => {
     const secret = Deno.env.get('CHECKOUT_INTERNAL_SECRET') || '';
     if (!url || !anon || !service || secret.length < 32)
       return respond(req, 503, { error: 'Checkout não configurado.' });
+    // TESTE RESTRITO: validar o JWT do operador e sua associação em admins.
+    // Não confiar no user_id enviado pelo navegador ou em checagem só no frontend.
+    const authorization = req.headers.get('authorization') || '';
+    const token = /^Bearer\\s+(.+)$/i.exec(authorization)?.[1];
+    if (!token) return respond(req, 401, { error: 'Faça login como administrador para testar.' });
+    const userClient = createClient(url, anon, {
+      global: { headers: { Authorization: 'Bearer ' + token } },
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { data: authData, error: authError } = await userClient.auth.getUser(token);
+    if (authError || !authData.user)
+      return respond(req, 401, { error: 'Sessão inválida ou expirada.' });
+    const { data: admin, error: adminError } = await userClient
+      .from('admins').select('user_id').eq('user_id', authData.user.id).maybeSingle();
+    if (adminError || !admin)
+      return respond(req, 403, { error: 'Somente administradores podem criar pedidos de teste.' });
+
     const invoke = async (name: string, payload: unknown) => {
       const res = await fetch(url + '/functions/v1/' + name, {
         method: 'POST',
