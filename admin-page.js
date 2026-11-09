@@ -33,10 +33,8 @@
     accessButton.disabled = true;
     accessResult.textContent = 'Verificando…';
     try {
-      const config = window.STORE_CONFIG;
-      if (!config?.supabaseUrl || !config?.supabaseAnonKey || !window.supabase)
-        throw new Error('Configuração do Supabase não encontrada.');
-      const client = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
+      const client = window.getAdminSupabaseClient?.();
+      if (!client) throw new Error('Cliente Supabase não inicializado.');
       const { data: { session }, error: sessionError } = await client.auth.getSession();
       if (sessionError || !session?.access_token)
         throw new Error('Faça login novamente no painel.');
