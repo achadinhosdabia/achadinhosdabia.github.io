@@ -44,13 +44,12 @@
       if (!client) throw new Error('Faça login como administrador.');
       const { data: auth } = await client.auth.getSession();
       if (!auth?.session?.access_token) throw new Error('Sessão expirada. Entre novamente.');
-      const base = (window.SUPABASE_URL || window.supabaseUrl || '').replace(/\\/$/, '');
-      const endpoint = base || (typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : '');
+      const endpoint = String(window.STORE_CONFIG?.supabaseUrl || '').replace(/\\/$/, '');
       if (!endpoint) throw new Error('Endereço do Supabase não configurado.');
       const response = await fetch(endpoint + '/functions/v1/admin-cancel-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + auth.session.access_token,
-          'apikey': (window.SUPABASE_ANON_KEY || (typeof SUPABASE_ANON_KEY !== 'undefined' ? SUPABASE_ANON_KEY : '')) },
+          'apikey': window.STORE_CONFIG?.supabaseAnonKey || '' },
         body: JSON.stringify({order_id: order.id, confirm: true}),
       });
       const result = await response.json();
