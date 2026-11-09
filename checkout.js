@@ -7,6 +7,8 @@
   const message=document.getElementById('checkout-message');
   const zip=field('shipping_zip');
   let lastZip='',requestId=0,checkoutSnapshot=null,validationRequest=0;
+  // Uma chave por tentativa lógica de compra; não muda em reenvios do mesmo checkout.
+  let checkoutRequestKey=null;
   const setMessage=(text)=>{message.textContent=text;};
   const digits=value=>String(value||'').replace(/\D/g,'');
   const clearAddress=()=>{
@@ -53,6 +55,7 @@
   window.openCheckoutPreview=({items,shipping,destinationZip})=>{
     if(!items?.length||!shipping||!/^\d{8}$/.test(destinationZip))return;
     checkoutSnapshot={items:items.map(item=>({...item})),shipping:{...shipping},destinationZip};
+    checkoutRequestKey=crypto.randomUUID();
     zip.value=destinationZip.slice(0,5)+'-'+destinationZip.slice(5);
     lastZip='';
     clearAddress();
@@ -168,6 +171,7 @@
     if(!cpf.validity.valid)cpf.reportValidity();
   });
   field('customer_cpf').addEventListener('input',()=>field('customer_cpf').setCustomValidity(''));
+  // A chave é preparada para o fluxo futuro, mas não é enviada à função de simulação.
   // Teste explícito: valida no servidor, mas nunca cria pedido ou cobra.
   const testButton=document.createElement('button');
   testButton.type='button';
