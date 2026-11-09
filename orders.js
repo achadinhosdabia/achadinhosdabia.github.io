@@ -26,11 +26,21 @@
       : 'Nenhum pedido encontrado.';
     $('orders-list').innerHTML = filtered.map(o => {
       const items = (o.order_items || []).map(i =>
-        '<li>' + esc(i.product_name) + ' · ' + Number(i.quantity) + ' × ' + money(i.unit_price) + '</li>').join('');
+        '<li>' + esc(i.product_name) + ' · ' + Number(i.quantity) + ' × ' + money(i.unit_price) + ' = ' + money(i.line_total) + '</li>').join('');
       const address = [o.shipping_street, o.shipping_number, o.shipping_complement, o.shipping_neighborhood, o.shipping_city, o.shipping_state, o.shipping_zip].filter(Boolean).join(', ');
-      return '<details class="order-card"><summary><strong>Pedido #' + esc(o.order_number) + '</strong><span>' + esc(o.customer_name) + '</span><span>' + money(o.total) + '</span><span>' + esc(statuses[o.order_status] || o.order_status) + '</span></summary><div class="order-card-body"><p><b>Data:</b> ' + esc(new Date(o.created_at).toLocaleString('pt-BR')) + '</p><p><b>Pagamento:</b> ' + esc(paymentStatuses[o.payment_status] || o.payment_status) + '</p><p><b>E-mail:</b> ' + esc(o.customer_email) + '</p><p><b>Telefone:</b> ' + esc(o.customer_phone) + '</p><p><b>Endereço:</b> ' + esc(address) + '</p><p><b>Frete:</b> ' + esc([o.shipping_company,o.shipping_service].filter(Boolean).join(' · ')) + ' — ' + money(o.shipping_price) + '</p><p><b>Rastreamento:</b> ' + esc(o.tracking_code || 'Ainda não informado') + '</p><p><b>Subtotal:</b> ' + money(o.subtotal) + '</p><b>Produtos:</b><ul>' + items + '</ul><p class="orders-note">Atualização de envio será habilitada na próxima etapa.</p></div></details>';
+      return '<details class="order-card"><summary title="Clique para visualizar todos os dados do pedido"><strong>Pedido #' + esc(o.order_number) + '</strong><span>' + esc(o.customer_name) + '</span><span>' + money(o.total) + '</span><span>' + esc(statuses[o.order_status] || o.order_status) + '</span></summary><div class="order-card-body"><p><b>Data:</b> ' + esc(new Date(o.created_at).toLocaleString('pt-BR')) + '</p><p><b>Pagamento:</b> ' + esc(paymentStatuses[o.payment_status] || o.payment_status) + '</p><p><b>E-mail:</b> ' + esc(o.customer_email) + '</p><p><b>Telefone:</b> ' + esc(o.customer_phone) + '</p><p><b>Endereço:</b> ' + esc(address) + '</p><p><b>Frete:</b> ' + esc([o.shipping_company,o.shipping_service].filter(Boolean).join(' · ')) + ' — ' + money(o.shipping_price) + '</p><p><b>Rastreamento:</b> ' + esc(o.tracking_code || 'Ainda não informado') + '</p><p><b>Subtotal:</b> ' + money(o.subtotal) + '</p><b>Produtos:</b><ul>' + items + '</ul><p class="orders-note">Atualização de envio será habilitada na próxima etapa.</p></div></details>';
     }).join('');
   }
+  $('orders-list').addEventListener('click', async event => {
+    const button = event.target.closest('[data-copy-order]');
+    if (!button) return;
+    const order = orders.find(o => o.id === button.dataset.copyOrder);
+    if (!order) return;
+    const address = [order.shipping_street,order.shipping_number,order.shipping_complement,order.shipping_neighborhood,order.shipping_city,order.shipping_state,order.shipping_zip].filter(Boolean).join(', ');
+    const lines = ['Pedido #' + order.order_number, 'Cliente: ' + order.customer_name, 'Status: ' + (statuses[order.order_status] || order.order_status), 'Pagamento: ' + (paymentStatuses[order.payment_status] || order.payment_status), ...((order.order_items || []).map(i => i.quantity + ' × ' + i.product_name + ' — ' + money(i.line_total))), 'Subtotal: ' + money(order.subtotal), 'Frete: ' + money(order.shipping_price), 'Total: ' + money(order.total), 'Endereço: ' + address];
+    try { await navigator.clipboard.writeText(lines.join('\\n')); button.textContent = 'Resumo copiado!'; }
+    catch (_) { button.textContent = 'Não foi possível copiar'; }
+  });
   async function load() {
     const current = ++request;
     if (!panel || panel.hidden || !db || !session) return;
