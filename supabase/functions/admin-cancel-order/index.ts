@@ -24,7 +24,7 @@ Deno.serve(async req => {
     if(body?.confirm!==true) return reply(400,{error:'Confirmação obrigatória.'});
     const db=createClient(url,service,{auth:{persistSession:false}});
     const {data,error}=await db.rpc('cancel_store_order_admin',{p_order_id:body.order_id,p_reason:'Cancelamento manual pelo painel'});
-    if(error){console.error('cancel_store_order_admin',error.code,error.message);return reply(409,{error:'Não foi possível cancelar. Verifique o status do pedido.'});}
+    if(error){console.error('cancel_store_order_admin',{code:error.code,message:error.message,details:error.details,hint:error.hint});return reply(409,{error:'O servidor recusou o cancelamento. Consulte os logs da função.',diagnostic_code:error.code||'RPC_UNKNOWN'});}
     return reply(200,{result:data});
   }catch(err){console.error('Falha no cancelamento',err instanceof Error?err.message:'erro');return reply(500,{error:'Falha ao processar cancelamento.'});}
 });
