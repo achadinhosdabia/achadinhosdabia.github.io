@@ -11,6 +11,11 @@
  testButton.type='button';testButton.className='btn btn-ghost';
  testButton.textContent='Testar conexão Mercado Pago';
  testButton.style.marginTop='12px';section.appendChild(testButton);
+ const orderTestButton=document.createElement('button');
+ orderTestButton.type='button';orderTestButton.className='btn btn-ghost';
+ orderTestButton.textContent='Criar Order de teste (R$ 1,00)';
+ orderTestButton.style.margin='12px 0 0 8px';section.appendChild(orderTestButton);
+ const orderResult=document.createElement('div');orderResult.setAttribute('role','status');orderResult.style.marginTop='12px';section.appendChild(orderResult);
  const form=section.querySelector('form'),msg=section.querySelector('#payment-settings-message');
  const client=()=>window.getAdminSupabaseClient?.();
  async function load(){
@@ -51,6 +56,20 @@
      msg.textContent=data?.connected===true?'✓ Conexão de teste validada! Nenhuma cobrança criada.':(data?.error||'Não foi possível validar a credencial.');
    }catch(e){msg.textContent='Teste não concluído: '+(e?.message||'erro desconhecido');}
    finally{testButton.disabled=false;}
+ });
+ orderTestButton.addEventListener('click',async()=>{
+   if(!confirm('Criar uma Order isolada de R$ 1,00 no ambiente de teste do Mercado Pago? Isso não altera pedidos nem estoque da loja.'))return;
+   orderTestButton.disabled=true;orderResult.replaceChildren();orderResult.textContent='Solicitando Order de teste ao Mercado Pago…';
+   try{
+     const {data,error}=await client().functions.invoke('mercado-pago-create-test-order',{body:{request_key:crypto.randomUUID()}});
+     if(error){let detail='';let status='';try{const response=await error.context?.json?.();detail=response?.error||'';status=response?.provider_status?' (HTTP '+response.provider_status+')':'';}catch(_){}throw new Error((detail||error.message||'Falha na requisição.')+status);}
+     if(data?.mode!=='test_only'||!data?.order_id||!data?.checkout_url)throw new Error(data?.error||'Resposta incompleta da API.');
+     orderResult.textContent='✓ Order de teste criada: '+data.order_id+' · ';
+     const link=document.createElement('a');link.href=data.checkout_url;link.target='_blank';link.rel='noopener noreferrer';link.textContent='Abrir checkout de teste';
+     if(!/^https:\/\//i.test(link.href))throw new Error('URL de checkout inválida.');
+     orderResult.append(link);
+   }catch(e){orderResult.textContent='Teste não concluído: '+(e?.message||'erro desconhecido');}
+   finally{orderTestButton.disabled=false;}
  });
  window.refreshPaymentSettings=load;
 })();
