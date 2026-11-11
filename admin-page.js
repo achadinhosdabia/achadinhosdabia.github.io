@@ -10,7 +10,7 @@
     overview: () => [document.getElementById('admin-overview')],
     orders: () => [document.querySelector('.orders-admin')],
     products: () => [document.querySelector('.admin-toolbar'),document.getElementById('admin-products'),document.getElementById('product-form'),document.getElementById('gallery-admin'),document.querySelector('.shipping-connection')],
-    settings: () => [document.querySelector('.store-settings')]
+    settings: () => [document.querySelector('.store-settings'),document.querySelector('.payment-settings')]
   };
 
   // Diagnóstico somente-leitura; visível apenas no painel autenticado.
@@ -68,6 +68,7 @@
     const shipping = document.getElementById('connect-melhor-envio')?.parentElement;
     if (shipping) shipping.hidden = selected !== 'settings';
     if (selected === 'orders' && !panel.hidden) window.refreshOrders?.();
+    if (selected === 'settings' && !panel.hidden) window.refreshPaymentSettings?.();
   }
   tabs.forEach(b => b.addEventListener('click',() => show(b.dataset.adminTab)));
   const originalShowModal = dialog.showModal.bind(dialog);
