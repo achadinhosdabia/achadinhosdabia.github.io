@@ -25,9 +25,44 @@ Deno.serve(async (req: Request) => {
  try{body=await req.json()}catch{return reply(400,{error:'JSON inválido.'})}
  const id=body?.order_id;
  if(typeof id!=='string'||!/^ORDTST[A-Z0-9]{8,60}$/.test(id))return reply(400,{error:'Identificador de Order de teste inválido.'});
+ // Busca de leitura alternativa: a API pode criar IDs ORDTST que o GET por ID rejeita.
+ // Limitar a janela e a paginação evita buscar indefinidamente cobranças da conta.
+ const searchExistingOrder=async()=>{
+  const begin=new Date(Date.now()-7*24*60*60*1000).toISOString();
+  const end=new Date(Date.now()+60*60*1000).toISOString();
+  for(let page=1;page<=3;page++){
+   const query=new URL('https://api.mercadopago.com/v1/orders');
+   query.searchParams.set('begin_date',begin);
+   query.searchParams.set('end_date',end);
+   query.searchParams.set('type','online');
+   query.searchParams.set('page',String(page));
+   query.searchParams.set('page_size','100');
+   query.searchParams.set('sort_by','created_date');
+   query.searchParams.set('sort_order','desc');
+   const r=await fetch(query.toString(),{
+    headers:{Authorization:'Bearer '+token,Accept:'application/json'},
+    signal:AbortSignal.timeout(12000)
+   });
+   if(!r.ok){
+    console.warn('MP PIX search rejected',{status:r.status});
+    return {order:null,failed_status:r.status};
+   }
+   const result=await r.json().catch(()=>({}));
+   const candidates=Array.isArray(result?.data)?result.data:[];
+   const match=candidates.find((candidate:unknown)=>{
+    if(!candidate||typeof candidate!=='object'||Array.isArray(candidate))return false;
+    return (candidate as {id?:unknown}).id===id;
+   });
+   if(match)return {order:match,failed_status:null};
+   if(candidates.length<100)break;
+  }
+  return {order:null,failed_status:null};
+ };
  try{
   const response=await fetch('https://api.mercadopago.com/v1/orders/'+encodeURIComponent(id),{
    headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:AbortSignal.timeout(12000)});
+  let order:Record<string,any>|null=null;
+  let lookupMethod='by_id';
   if(!response.ok){
    // Retorna apenas campos de diagnóstico não sensíveis, nunca o corpo integral do provedor.
    const raw=await response.text();
@@ -59,12 +94,26 @@ Deno.serve(async (req: Request) => {
      provider_body_length:raw.length,
    };
    if(response.status===400&&nestedDetails.some(x=>x.code==='invalid_path_param')){
-     return reply(422,{error:'O Mercado Pago não aceitou o identificador de teste ORDTST na consulta por ID. Não altere o identificador; consulte os dados da resposta original de criação.',order_id:id,provider_status:400,provider_code:'invalid_path_param'});
+    // O identificador ORDTST pode ser recusado por GET /v1/orders/{id}.
+    // Procurar somente a Order existente por data: não gera pagamento.
+    const recovered=await searchExistingOrder();
+    if(recovered.failed_status)return reply(502,{
+     error:'Consulta direta rejeitada e busca por período não disponível.',
+     order_id:id,provider_code:'invalid_path_param',search_status:recovered.failed_status
+    });
+    if(!recovered.order)return reply(404,{
+     error:'A Order de teste não foi localizada na busca dos últimos 7 dias. Não foi criada nova cobrança.',
+     order_id:id,provider_code:'invalid_path_param',search_result:'not_found'
+    });
+    order=recovered.order;
+    lookupMethod='date_search';
+   }else{
+    console.warn('MP PIX inspection rejected',diagnostic);
+    return reply(502,{error:'Não foi possível consultar a Order no Mercado Pago.',...diagnostic});
    }
-   console.warn('MP PIX inspection rejected',diagnostic);
-   return reply(502,{error:'Não foi possível consultar a Order no Mercado Pago.',...diagnostic});
+  }else{
+   order=await response.json();
   }
-  const order=await response.json();
   if(order?.id!==id||typeof order?.external_reference!=='string'||!order.external_reference.startsWith('bia_pix_sandbox_'))
    return reply(403,{error:'Esta Order não pertence ao diagnóstico PIX isolado.'});
   const payment=order?.transactions?.payments?.[0];
@@ -74,8 +123,10 @@ Deno.serve(async (req: Request) => {
   const qrCode=typeof pm.qr_code==='string'?pm.qr_code:typeof tx.qr_code==='string'?tx.qr_code:null;
   const qrBase64=typeof pm.qr_code_base64==='string'?pm.qr_code_base64:typeof tx.qr_code_base64==='string'?tx.qr_code_base64:null;
   const ticketUrl=typeof pm.ticket_url==='string'?pm.ticket_url:typeof tx.external_resource_url==='string'?tx.external_resource_url:null;
-  return reply(200,{mode:'pix_sandbox_read_only',order_id:id,order_status:order.status||null,
-   payment_status:payment.status||null,payment_id:payment.id||null,
+  return reply(200,{mode:'pix_sandbox_read_only',lookup_method:lookupMethod,
+   order_id:id,order_status:order.status||null,order_status_detail:order.status_detail||null,
+   payment_status:payment.status||null,payment_status_detail:payment.status_detail||null,
+   payment_id:payment.id||null,
    has_qr_code:!!qrCode,has_qr_image:!!qrBase64,has_ticket_url:!!ticketUrl,
    // Não retornar códigos pagáveis nesta ferramenta de diagnóstico.
    message:'Consulta concluída sem criar cobranças ou modificar a loja.'});
