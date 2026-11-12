@@ -44,7 +44,10 @@ Deno.serve(async (req: Request) => {
   const {data:order,error:orderError} = await db.from('orders')
     .select('id,order_number,total,payment_method,payment_status,order_status,payment_expires_at')
     .eq('id',id).maybeSingle();
-  if (orderError) return reply(503, {error:'Falha ao consultar pedido.'});
+  if (orderError) {
+    console.error('MP store order lookup failed', {code:orderError.code, message:orderError.message});
+    return reply(503, {error:'Falha ao consultar pedido.', diagnostic_code:orderError.code || 'UNKNOWN'});
+  }
   if (!order) return reply(404, {error:'Pedido não encontrado.'});
   if (order.payment_method !== 'mercado_pago' || order.payment_status !== 'pending' ||
       order.order_status !== 'pending_payment' ||
