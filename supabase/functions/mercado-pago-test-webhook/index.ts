@@ -13,9 +13,9 @@ Deno.serve(async(request:Request)=>{
  const requestId=request.headers.get("x-request-id")||"";
  const ts=/\bts=([0-9]+)\b/.exec(signature)?.[1];
  const received=/\bv1=([a-f0-9]{64})\b/i.exec(signature)?.[1]?.toLowerCase();
- if(!ts||!received||!requestId||requestId.length>256)return json(401,{error:"Invalid signature"});
+ if(!ts||!received||!requestId||requestId.length>256){console.warn("MP webhook rejected: missing or malformed signature headers",{hasTimestamp:!!ts,hasDigest:!!received,hasRequestId:!!requestId,requestIdTooLong:requestId.length>256});return json(401,{error:"Invalid signature"});}
  const timestamp=Number(ts);
- if(!Number.isSafeInteger(timestamp)||Math.abs(Date.now()-timestamp*1000)>10*60*1000)return json(401,{error:"Expired signature"});
+ if(!Number.isSafeInteger(timestamp)||Math.abs(Date.now()-timestamp*1000)>10*60*1000){console.warn("MP webhook rejected: invalid or expired timestamp",{timestampIsInteger:Number.isSafeInteger(timestamp),ageSeconds:Number.isSafeInteger(timestamp)?Math.round((Date.now()-timestamp*1000)/1000):null});return json(401,{error:"Expired signature"});}
  const url=new URL(request.url);
  const queryId=url.searchParams.get("data.id");
  let payload:Record<string,unknown>;
@@ -31,7 +31,7 @@ Deno.serve(async(request:Request)=>{
  const key=await crypto.subtle.importKey("raw",encoder.encode(secret),{name:"HMAC",hash:"SHA-256"},false,["sign"]);
  const mac=await crypto.subtle.sign("HMAC",key,encoder.encode(manifest));
  const expected=Array.from(new Uint8Array(mac),x=>x.toString(16).padStart(2,"0")).join("");
- if(!safeEqual(received,expected))return json(401,{error:"Invalid signature"});
+ if(!safeEqual(received,expected)){console.warn("MP webhook rejected: HMAC mismatch",{eventType:String(payload.type||payload.topic||"").slice(0,40),hasQueryId:!!queryId,hasBodyId:!!bodyId});return json(401,{error:"Invalid signature"});}
  const topic=String(payload.type||payload.topic||"").toLowerCase();
  if(topic&&topic!=="order"&&topic!=="orders")return json(200,{received:true,ignored:true});
  try{
