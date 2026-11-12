@@ -89,6 +89,35 @@ Deno.serve(async (req: Request) => {
     if (typeof result.id !== 'string' || typeof result.checkout_url !== 'string' ||
         !/^https:\/\//i.test(result.checkout_url))
       return reply(502,{error:'Resposta do Mercado Pago incompleta.'});
+    // Persistir o vínculo antes de expor o checkout. Em reenvios, a chave
+    // idempotente do Mercado Pago é o UUID do pedido, não uma nova cobrança.
+    const link = {
+      store_order_id:id,
+      mp_order_id:result.id,
+      external_reference:'bia_order_test_'+id,
+      amount_cents:Math.round(amount*100),
+      environment:'test',
+    };
+    const {data:existing,error:existingError}=await db.from('mp_order_links')
+      .select('store_order_id,mp_order_id,external_reference,amount_cents,environment')
+      .eq('store_order_id',id).maybeSingle();
+    if(existingError){
+      console.error('MP payment link lookup failed',existingError.code);
+      return reply(503,{error:'Não foi possível verificar o vínculo do pagamento. Não abra o checkout.'});
+    }
+    if(existing){
+      if(existing.mp_order_id!==link.mp_order_id ||
+         existing.external_reference!==link.external_reference ||
+         Number(existing.amount_cents)!==link.amount_cents ||
+         existing.environment!=='test')
+        return reply(409,{error:'Já existe outro pagamento vinculado ao pedido. Checkout bloqueado.'});
+    }else{
+      const {error:linkError}=await db.from('mp_order_links').insert(link);
+      if(linkError){
+        console.error('MP payment link insert failed',linkError.code);
+        return reply(503,{error:'Não foi possível registrar o vínculo do pagamento. Não abra o checkout.'});
+      }
+    }
     return reply(201,{
       mode:'test_only',store_order_id:id,mp_order_id:result.id,
       checkout_url:result.checkout_url,amount:amount.toFixed(2),
