@@ -31,7 +31,24 @@ Deno.serve(async(request:Request)=>{
  const key=await crypto.subtle.importKey("raw",encoder.encode(secret),{name:"HMAC",hash:"SHA-256"},false,["sign"]);
  const mac=await crypto.subtle.sign("HMAC",key,encoder.encode(manifest));
  const expected=Array.from(new Uint8Array(mac),x=>x.toString(16).padStart(2,"0")).join("");
- if(!safeEqual(received,expected)){console.warn("MP webhook rejected: HMAC mismatch",{eventType:String(payload.type||payload.topic||"").slice(0,40),hasQueryId:!!queryId,hasBodyId:!!bodyId});return json(401,{error:"Invalid signature"});}
+ if(!safeEqual(received,expected)){
+  // Diagnóstico seguro: compara variantes de canonicalização sem aceitá-las.
+  // Nunca registra segredos, assinaturas, IDs de requisição ou conteúdo da Order.
+  async function matchesManifest(id:string, normalized:boolean){
+   const candidate=`id:${normalized?id.toLowerCase():id};request-id:${requestId};ts:${ts};`;
+   const signed=await crypto.subtle.sign("HMAC",key,encoder.encode(candidate));
+   const hex=Array.from(new Uint8Array(signed),x=>x.toString(16).padStart(2,"0")).join("");
+   return safeEqual(received,hex);
+  }
+  console.warn("MP webhook rejected: HMAC mismatch",{
+   eventType:String(payload.type||payload.topic||"").slice(0,40),
+   hasQueryId:!!queryId,hasBodyId:!!bodyId,
+   matchesOriginalCase:await matchesManifest(orderId,false),
+   matchesBodyLowercase:bodyId?await matchesManifest(bodyId,true):false,
+   matchesBodyOriginalCase:bodyId?await matchesManifest(bodyId,false):false,
+  });
+  return json(401,{error:"Invalid signature"});
+ }
  const topic=String(payload.type||payload.topic||"").toLowerCase();
  if(topic&&topic!=="order"&&topic!=="orders")return json(200,{received:true,ignored:true});
  try{
