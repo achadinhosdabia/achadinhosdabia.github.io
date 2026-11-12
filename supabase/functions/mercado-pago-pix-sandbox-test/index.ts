@@ -80,8 +80,16 @@ Deno.serve(async (req: Request) => {
         payment?.payment_method?.id !== 'pix') {
       return reply(502, { error: 'Resposta PIX incompleta.' });
     }
+    const pm = payment.payment_method || {};
+    const details = payment.transaction_details || {};
+    const hasQrCode = Boolean(pm.qr_code || details.qr_code);
+    const hasQrImage = Boolean(pm.qr_code_base64 || details.qr_code_base64);
+    const hasTicketUrl = Boolean(pm.ticket_url || details.external_resource_url);
     return reply(201, {
       mode: 'pix_sandbox_only',
+      has_qr_code: hasQrCode,
+      has_qr_image: hasQrImage,
+      has_ticket_url: hasTicketUrl,
       order_id: result.id,
       order_status: result.status || null,
       payment_status: payment.status || null,
