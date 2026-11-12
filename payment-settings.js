@@ -44,7 +44,9 @@
        }
        if(data?.mode!=='pix_sandbox_read_only')throw new Error('Resposta inesperada.');
        inspectResult.textContent='Order: '+data.order_id+
-         ' | status: '+data.order_status+' | pagamento: '+data.payment_status+
+         ' | consulta: '+(data.lookup_method==='date_search'?'busca por data':'por ID')+
+         ' | status: '+data.order_status+' ('+(data.order_status_detail||'sem detalhe')+')'+
+         ' | pagamento: '+data.payment_status+' ('+(data.payment_status_detail||'sem detalhe')+')'+
          ' | QR Code disponível: '+(data.has_qr_code?'sim':'não')+
          ' | imagem QR: '+(data.has_qr_image?'sim':'não')+
          ' | link de pagamento: '+(data.has_ticket_url?'sim':'não')+
