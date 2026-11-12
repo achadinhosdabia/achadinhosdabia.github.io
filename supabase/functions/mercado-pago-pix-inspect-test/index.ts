@@ -31,31 +31,35 @@ Deno.serve(async (req: Request) => {
   if(!response.ok){
    // Retorna apenas campos de diagnóstico não sensíveis, nunca o corpo integral do provedor.
    const raw=await response.text();
-   let failure:unknown=null;
-   try{failure=JSON.parse(raw)}catch(_){}
-   const record=failure&&typeof failure==='object'&&!Array.isArray(failure)
-     ?failure as Record<string,unknown>:{};
-   const contentType=(response.headers.get('content-type')||'').split(';')[0].slice(0,60);
-   const bodyKind=!raw.trim()?'empty':failure===null?'non_json':
-     Array.isArray(failure)?'json_array':typeof failure==='string'?'json_string':
-     typeof failure==='object'?'json_object':typeof failure;
-   const responseBodyLength=raw.length;
-   const safeField=(value:unknown)=>typeof value==='string'
-     ? value.replace(/[\\r\\n]/g,' ').slice(0,160):null;
-   const providerCode=safeField(record.code)||safeField(record.error);
-   const providerMessage=safeField(record.message);
-   const causeCodes=Array.isArray(record.cause)?failure.cause.slice(0,3)
-     .map((c:unknown)=>typeof c==='object'&&c!==null&&'code' in c?String(c.code).slice(0,80):null)
-     .filter(Boolean):[];
-   const responseShape=failure&&typeof failure==='object'&&!Array.isArray(failure)
-     ?Object.keys(failure).filter(k=>['code','error','message','cause','status','type','description'].includes(k)):[];
-   console.warn('MP PIX inspection rejected',{
-     status:response.status,code:providerCode,message:providerMessage,causeCodes,responseShape,contentType,bodyKind,responseBodyLength
+   let parsed:unknown=null;
+   try{parsed=JSON.parse(raw)}catch(_){}
+   const record=parsed&&typeof parsed==='object'&&!Array.isArray(parsed)
+     ?parsed as Record<string,unknown>:{};
+   // Erros da Orders API podem estar em errors[] (não apenas code/message na raiz).
+   const safeCode=(v:unknown)=>typeof v==='string'||typeof v==='number'
+     ?String(v).replace(/[^a-zA-Z0-9_.-]/g,'').slice(0,80):null;
+   const safeMessage=(v:unknown)=>typeof v==='string'
+     ?v.replace(/[\\r\\n]/g,' ').slice(0,180):null;
+   const nested=Array.isArray(record.errors)?record.errors:
+     Array.isArray(record.cause)?record.cause:[];
+   const nestedDetails=nested.slice(0,3).map((item:unknown)=>{
+     const obj=item&&typeof item==='object'&&!Array.isArray(item)
+       ?item as Record<string,unknown>:{};
+     return {code:safeCode(obj.code),message:safeMessage(obj.message||obj.description)};
    });
-   return reply(502,{error:'Não foi possível consultar a Order no Mercado Pago.',
-     provider_status:response.status,provider_code:providerCode,
-     provider_message:providerMessage,provider_cause_codes:causeCodes,
-     provider_response_fields:responseShape,provider_content_type:contentType,provider_body_kind:bodyKind,provider_body_length:responseBodyLength});
+   const diagnostic={
+     provider_status:response.status,
+     provider_code:safeCode(record.code||record.error),
+     provider_message:safeMessage(record.message||record.description),
+     provider_errors:nestedDetails,
+     provider_response_fields:Object.keys(record).slice(0,12),
+     provider_content_type:(response.headers.get('content-type')||'').split(';')[0].slice(0,60),
+     provider_body_kind:!raw.trim()?'empty':parsed===null?'non_json':
+       Array.isArray(parsed)?'json_array':typeof parsed==='object'?'json_object':typeof parsed,
+     provider_body_length:raw.length,
+   };
+   console.warn('MP PIX inspection rejected',diagnostic);
+   return reply(502,{error:'Não foi possível consultar a Order no Mercado Pago.',...diagnostic});
   }
   const order=await response.json();
   if(order?.id!==id||typeof order?.external_reference!=='string'||!order.external_reference.startsWith('bia_pix_sandbox_'))
