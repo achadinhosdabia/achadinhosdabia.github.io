@@ -58,6 +58,9 @@ Deno.serve(async (req: Request) => {
        Array.isArray(parsed)?'json_array':typeof parsed==='object'?'json_object':typeof parsed,
      provider_body_length:raw.length,
    };
+   if(response.status===400&&nestedDetails.some(x=>x.code==='invalid_path_param')){
+     return reply(422,{error:'O Mercado Pago não aceitou o identificador de teste ORDTST na consulta por ID. Não altere o identificador; consulte os dados da resposta original de criação.',order_id:id,provider_status:400,provider_code:'invalid_path_param'});
+   }
    console.warn('MP PIX inspection rejected',diagnostic);
    return reply(502,{error:'Não foi possível consultar a Order no Mercado Pago.',...diagnostic});
   }
