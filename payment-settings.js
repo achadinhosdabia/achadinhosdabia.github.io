@@ -16,6 +16,45 @@
  orderTestButton.textContent='Criar Order de teste (R$ 1,00)';
  orderTestButton.style.margin='12px 0 0 8px';section.appendChild(orderTestButton);
  const orderResult=document.createElement('div');orderResult.setAttribute('role','status');orderResult.style.marginTop='12px';section.appendChild(orderResult);
+ // PIX pela Orders API: teste técnico isolado (R$ 50 fictícios), sem pedidos da loja.
+ if (['localhost','127.0.0.1'].includes(location.hostname)) {
+   const pixButton=document.createElement('button');
+   pixButton.type='button';pixButton.className='btn btn-ghost';
+   pixButton.textContent='Simular PIX pela API — Teste';
+   pixButton.style.margin='12px 0 0 8px';
+   section.appendChild(pixButton);
+   const pixResult=document.createElement('p');
+   pixResult.setAttribute('role','status');
+   section.appendChild(pixResult);
+   pixButton.addEventListener('click',async()=>{
+     if(!window.confirm('Executar simulação PIX isolada de R$ 50,00 fictícios na API do Mercado Pago? Não altera pedidos nem estoque.'))return;
+     pixButton.disabled=true;pixResult.textContent='Simulando PIX no ambiente de teste…';
+     try {
+       const client=window.getAdminSupabaseClient?.();
+       if(!client)throw new Error('Cliente administrativo indisponível.');
+       const {data:auth,error:authError}=await client.auth.getSession();
+       if(authError||!auth?.session?.access_token)throw new Error('Faça login novamente.');
+       const {data,error}=await client.functions.invoke('mercado-pago-pix-sandbox-test',{
+         body:{request_key:crypto.randomUUID()}
+       });
+       if(error){
+         let details=null;
+         try{details=await error.context?.json?.();}catch(_){}
+         throw new Error((details?.error||error.message||'Falha no teste')+
+           (details?.provider_code?' · '+details.provider_code:'')+
+           (details?.provider_status?' (HTTP '+details.provider_status+')':''));
+       }
+       if(data?.mode!=='pix_sandbox_only'||data?.amount!=='50.00')
+         throw new Error('Resposta de homologação inválida.');
+       pixResult.textContent='✓ Simulação PIX criada. Order: '+data.order_id+
+         ' · status: '+(data.order_status||'não informado')+
+         ' · pagamento: '+(data.payment_status||'não informado')+
+         '. Nenhum pedido ou estoque da loja foi alterado.';
+     }catch(error){pixResult.textContent='Teste PIX não concluído: '+(error?.message||'erro desconhecido');}
+     finally{pixButton.disabled=false;}
+   });
+ }
+
  const form=section.querySelector('form'),msg=section.querySelector('#payment-settings-message');
  const client=()=>window.getAdminSupabaseClient?.();
  async function load(){
