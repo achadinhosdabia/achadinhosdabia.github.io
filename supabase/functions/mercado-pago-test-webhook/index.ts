@@ -90,12 +90,44 @@ Deno.serve(async(request:Request)=>{
   const statuses=payments.map((p:Record<string,unknown>)=>String(p?.status||""));
   const approved=payments.length>0&&statuses.every((status:string)=>status==="approved");
   const providerStatus=String(order?.status||"unknown");
-  // Intencionalmente NÃO confirma pagamento: falta persistência do vínculo
-  // MP order_id -> pedido local e transição atômica/idempotente de status.
-  console.info("MP test webhook verified linked order",{
-    providerStatus,approved,localPaymentStatus:local.payment_status,localOrderStatus:local.order_status
+  // O vínculo foi criado pelo backend antes de fornecer o checkout.
+  // A referência enviada no webhook não autoriza a confirmação sozinha.
+  const headers={apikey:serviceKey,Authorization:"Bearer "+serviceKey,Accept:"application/json"};
+  const linkResponse=await fetch(supabaseUrl+"/rest/v1/mp_order_links?store_order_id=eq."+
+    encodeURIComponent(match[1])+"&select=mp_order_id,external_reference,amount_cents,environment",{
+    headers,signal:AbortSignal.timeout(10000)
   });
-  return json(200,{received:true,verified:true,linked:true,amount_verified:true,
-    approved_in_provider:approved,confirmation_applied:false,mode:"test_only"});
+  if(!linkResponse.ok)return json(503,{error:"Payment link verification unavailable"});
+  const links=await linkResponse.json();
+  const link=Array.isArray(links)?links[0]:null;
+  const cents=Math.round(amount*100);
+  if(!link||link.mp_order_id!==orderId||link.external_reference!==reference||
+     Number(link.amount_cents)!==cents||link.environment!=="test"){
+    console.warn("MP test webhook: payment link mismatch");
+    return json(409,{error:"Payment link mismatch"});
+  }
+  // Apenas pagamento integralmente aprovado pode iniciar a transição.
+  // O modo de homologação é desabilitado por padrão, mesmo com webhook válido.
+  if(!approved)return json(200,{received:true,verified:true,linked:true,
+    approved_in_provider:false,confirmation_applied:false,mode:"test_only"});
+  if(Deno.env.get("MP_WEBHOOK_CONFIRM_TEST_ENABLED")!=="true"){
+    console.info("MP test webhook: confirmed provider payment; mutation disabled");
+    return json(200,{received:true,verified:true,linked:true,
+      approved_in_provider:true,confirmation_applied:false,mode:"test_only"});
+  }
+  const rpc=await fetch(supabaseUrl+"/rest/v1/rpc/confirm_verified_mp_payment",{
+    method:"POST",headers:{...headers,"Content-Type":"application/json"},
+    body:JSON.stringify({p_store_order_id:match[1],p_mp_order_id:orderId,
+      p_external_reference:reference,p_amount_cents:cents,p_environment:"test"}),
+    signal:AbortSignal.timeout(10000)
+  });
+  if(!rpc.ok){
+    console.error("MP test webhook: confirmation RPC failed",rpc.status);
+    return json(503,{error:"Payment reconciliation failed"});
+  }
+  const applied=await rpc.json();
+  return json(200,{received:true,verified:true,linked:true,
+    approved_in_provider:true,confirmation_applied:applied===true,
+    already_confirmed:applied===false,mode:"test_only"});
  }catch(error){console.error("MP test webhook provider request failed",error instanceof Error?error.message:"unknown");return json(503,{error:"Provider verification unavailable"});}
 });
