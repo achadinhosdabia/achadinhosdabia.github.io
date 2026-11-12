@@ -114,8 +114,19 @@ Deno.serve(async (req: Request) => {
     }else{
       const {error:linkError}=await db.from('mp_order_links').insert(link);
       if(linkError){
-        console.error('MP payment link insert failed',linkError.code);
-        return reply(503,{error:'Não foi possível registrar o vínculo do pagamento. Não abra o checkout.'});
+        // Duas chamadas simultâneas podem competir pelo mesmo pedido.
+        // Reconsultamos o registro único: só aceitamos a mesma cobrança.
+        const {data:concurrent,error:concurrentError}=await db.from('mp_order_links')
+          .select('mp_order_id,external_reference,amount_cents,environment')
+          .eq('store_order_id',id).maybeSingle();
+        if(concurrentError || !concurrent ||
+           concurrent.mp_order_id!==link.mp_order_id ||
+           concurrent.external_reference!==link.external_reference ||
+           Number(concurrent.amount_cents)!==link.amount_cents ||
+           concurrent.environment!=='test'){
+          console.error('MP payment link insert conflict',linkError.code);
+          return reply(503,{error:'Não foi possível registrar o vínculo do pagamento. Não abra o checkout.'});
+        }
       }
     }
     return reply(201,{
