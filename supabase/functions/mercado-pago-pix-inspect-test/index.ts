@@ -31,14 +31,22 @@ Deno.serve(async (req: Request) => {
   if(!response.ok){
    // Retorna apenas campos de diagnóstico não sensíveis, nunca o corpo integral do provedor.
    const failure=await response.json().catch(()=>({}));
-   const providerCode=typeof failure?.code==='string'?failure.code:
-     typeof failure?.error==='string'?failure.error:null;
+   const safeField=(value:unknown)=>typeof value==='string'
+     ? value.replace(/[\\r\\n]/g,' ').slice(0,160):null;
+   const providerCode=safeField(failure?.code)||safeField(failure?.error);
+   const providerMessage=safeField(failure?.message);
    const causeCodes=Array.isArray(failure?.cause)?failure.cause.slice(0,3)
      .map((c:unknown)=>typeof c==='object'&&c!==null&&'code' in c?String(c.code).slice(0,80):null)
      .filter(Boolean):[];
-   console.warn('MP PIX inspection rejected',{status:response.status,code:providerCode,causeCodes});
+   const responseShape=failure&&typeof failure==='object'&&!Array.isArray(failure)
+     ?Object.keys(failure).filter(k=>['code','error','message','cause','status','type','description'].includes(k)):[];
+   console.warn('MP PIX inspection rejected',{
+     status:response.status,code:providerCode,message:providerMessage,causeCodes,responseShape
+   });
    return reply(502,{error:'Não foi possível consultar a Order no Mercado Pago.',
-     provider_status:response.status,provider_code:providerCode,provider_cause_codes:causeCodes});
+     provider_status:response.status,provider_code:providerCode,
+     provider_message:providerMessage,provider_cause_codes:causeCodes,
+     provider_response_fields:responseShape});
   }
   const order=await response.json();
   if(order?.id!==id||typeof order?.external_reference!=='string'||!order.external_reference.startsWith('bia_pix_sandbox_'))
