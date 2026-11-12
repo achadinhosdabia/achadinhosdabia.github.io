@@ -1,5 +1,5 @@
 // Webhook Mercado Pago Orders — somente ambiente de teste.
-// Verifica assinatura HMAC e consulta a Order. Não atualiza pedidos nem estoque.
+// Verifica assinatura HMAC, Order e vínculo com pedido local. Não atualiza pedidos nem estoque.
 const encoder = new TextEncoder();
 function json(status:number, body:unknown){return new Response(JSON.stringify(body),{status,headers:{"content-type":"application/json","cache-control":"no-store"}});}
 function safeEqual(a:string,b:string){if(a.length!==b.length)return false;let mismatch=0;for(let i=0;i<a.length;i++)mismatch|=a.charCodeAt(i)^b.charCodeAt(i);return mismatch===0;}
@@ -56,8 +56,46 @@ Deno.serve(async(request:Request)=>{
   if(!response.ok){console.error("MP test webhook: provider lookup status",response.status);return json(503,{error:"Provider verification unavailable"});}
   const order=await response.json();
   if(String(order?.id)!==orderId)return json(502,{error:"Provider Order mismatch"});
-  // Apenas sinaliza o recebimento seguro. Nenhum pedido da loja é modificado.
-  console.info("MP test webhook verified Order",orderId,"status",String(order?.status||"unknown"));
-  return json(200,{received:true,verified:true,mode:"test_only"});
+  // Uma notificação nunca é prova suficiente de pagamento. Verificamos a Order
+  // no provedor e comparamos referência e valor com o pedido persistido.
+  const reference=typeof order?.external_reference==="string"?order.external_reference:"";
+  const match=/^bia_order_test_([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.exec(reference);
+  if(!match){
+   console.info("MP test webhook: Order sem referência de pedido da loja; ignorada");
+   return json(200,{received:true,verified:true,linked:false,mode:"test_only"});
+  }
+  const supabaseUrl=Deno.env.get("SUPABASE_URL");
+  const serviceKey=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if(!supabaseUrl||!serviceKey)return json(503,{error:"Order reconciliation not configured"});
+  const localResponse=await fetch(supabaseUrl+"/rest/v1/orders?id=eq."+encodeURIComponent(match[1])+
+    "&select=id,total,payment_method,payment_status,order_status",{
+    headers:{apikey:serviceKey,Authorization:"Bearer "+serviceKey,Accept:"application/json"},
+    signal:AbortSignal.timeout(10000)
+  });
+  if(!localResponse.ok)return json(503,{error:"Local order verification unavailable"});
+  const localOrders=await localResponse.json();
+  const local=Array.isArray(localOrders)?localOrders[0]:null;
+  if(!local||local.payment_method!=="mercado_pago"){
+   console.warn("MP test webhook: local order missing or incompatible");
+   return json(200,{received:true,verified:true,linked:false,mode:"test_only"});
+  }
+  const amount=Number(order?.total_amount);
+  const expected=Number(local.total);
+  if(!Number.isFinite(amount)||!Number.isFinite(expected)||
+     Math.round(amount*100)!==Math.round(expected*100)){
+   console.warn("MP test webhook: order total mismatch");
+   return json(409,{error:"Order amount mismatch"});
+  }
+  const payments=Array.isArray(order?.transactions?.payments)?order.transactions.payments:[];
+  const statuses=payments.map((p:Record<string,unknown>)=>String(p?.status||""));
+  const approved=payments.length>0&&statuses.every((status:string)=>status==="approved");
+  const providerStatus=String(order?.status||"unknown");
+  // Intencionalmente NÃO confirma pagamento: falta persistência do vínculo
+  // MP order_id -> pedido local e transição atômica/idempotente de status.
+  console.info("MP test webhook verified linked order",{
+    providerStatus,approved,localPaymentStatus:local.payment_status,localOrderStatus:local.order_status
+  });
+  return json(200,{received:true,verified:true,linked:true,amount_verified:true,
+    approved_in_provider:approved,confirmation_applied:false,mode:"test_only"});
  }catch(error){console.error("MP test webhook provider request failed",error instanceof Error?error.message:"unknown");return json(503,{error:"Provider verification unavailable"});}
 });
