@@ -23,6 +23,35 @@
    pixButton.textContent='Simular PIX pela API — Teste';
    pixButton.style.margin='12px 0 0 8px';
    section.appendChild(pixButton);
+   const inspectButton=document.createElement('button');
+   inspectButton.type='button';inspectButton.className='btn btn-ghost';
+   inspectButton.textContent='Inspecionar PIX já criado (sem cobrar)';
+   inspectButton.style.margin='12px 0 0 8px';section.appendChild(inspectButton);
+   const inspectResult=document.createElement('p');
+   inspectResult.setAttribute('role','status');section.appendChild(inspectResult);
+   inspectButton.addEventListener('click',async()=>{
+     inspectButton.disabled=true;
+     inspectResult.textContent='Consultando a Order PIX anterior…';
+     try{
+       const client=window.getAdminSupabaseClient?.();
+       if(!client)throw new Error('Cliente administrativo indisponível.');
+       const {data,error}=await client.functions.invoke('mercado-pago-pix-inspect-test',{
+         body:{order_id:'ORDTST01M78KKXDD6K9Q2EY2K5J872S'}
+       });
+       if(error){
+         let detail=null;try{detail=await error.context?.json?.()}catch(_){}
+         throw new Error(detail?.error||error.message||'Falha ao consultar PIX.');
+       }
+       if(data?.mode!=='pix_sandbox_read_only')throw new Error('Resposta inesperada.');
+       inspectResult.textContent='Order: '+data.order_id+
+         ' | status: '+data.order_status+' | pagamento: '+data.payment_status+
+         ' | QR Code disponível: '+(data.has_qr_code?'sim':'não')+
+         ' | imagem QR: '+(data.has_qr_image?'sim':'não')+
+         ' | link de pagamento: '+(data.has_ticket_url?'sim':'não')+
+         '. Nenhuma cobrança nova foi criada.';
+     }catch(e){inspectResult.textContent='Inspeção não concluída: '+(e?.message||'erro desconhecido');}
+     finally{inspectButton.disabled=false;}
+   });
    const pixResult=document.createElement('p');
    pixResult.setAttribute('role','status');
    section.appendChild(pixResult);
