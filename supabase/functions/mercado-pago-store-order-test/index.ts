@@ -26,7 +26,7 @@ Deno.serve(async (req: Request) => {
   const service = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   const token = Deno.env.get('MERCADO_PAGO_ACCESS_TOKEN_TEST');
   if (!url || !anon || !service || !token) return reply(503, {error:'Configuração incompleta.'});
-  const jwt = /^Bearer\\s+(.+)$/i.exec(req.headers.get('authorization') || '')?.[1];
+  const jwt = /^Bearer\s+(.+)$/i.exec(req.headers.get('authorization') || '')?.[1];
   if (!jwt) return reply(401, {error:'Login administrativo obrigatório.'});
   const userDb = createClient(url, anon, {
     global:{headers:{Authorization:'Bearer '+jwt}},
