@@ -26,8 +26,8 @@ Deno.serve(async(request:Request)=>{
  const orderId=queryId||bodyId;
  if(!orderId||!validId(orderId))return json(400,{error:"Invalid Order ID"});
  // O Mercado Pago assina o data.id recebido na query; quando não enviado, usa o id do corpo.
- // Para IDs alfanuméricos, preserva o valor original.
- const manifest=`id:${orderId.toLowerCase()};request-id:${requestId};ts:${ts};`;
+ // Para IDs alfanuméricos, preserva a capitalização original na assinatura HMAC.
+ const manifest=`id:${orderId};request-id:${requestId};ts:${ts};`;
  const key=await crypto.subtle.importKey("raw",encoder.encode(secret),{name:"HMAC",hash:"SHA-256"},false,["sign"]);
  const mac=await crypto.subtle.sign("HMAC",key,encoder.encode(manifest));
  const expected=Array.from(new Uint8Array(mac),x=>x.toString(16).padStart(2,"0")).join("");
