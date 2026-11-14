@@ -13,7 +13,6 @@
   const paymentStatuses = {pending:'Pendente',approved:'Aprovado',rejected:'Recusado',refunded:'Reembolsado',cancelled:'Cancelado'};
   // Homologação restrita ao ambiente local: nunca exibir o checkout de teste na loja publicada.
   const localPaymentTest = ['localhost', '127.0.0.1'].includes(location.hostname);
-  const paymentTestResults = new Map();
   let orders = [];
   let request = 0;
   function render() {
@@ -31,63 +30,100 @@
       const items = (o.order_items || []).map(i =>
         '<li>' + esc(i.product_name) + ' · ' + Number(i.quantity) + ' × ' + money(i.unit_price) + ' = ' + money(i.line_total) + '</li>').join('');
       const address = [o.shipping_street, o.shipping_number, o.shipping_complement, o.shipping_neighborhood, o.shipping_city, o.shipping_state, o.shipping_zip].filter(Boolean).join(', ');
-      return '<details class="order-card"><summary title="Clique para visualizar todos os dados do pedido"><strong>Pedido #' + esc(o.order_number) + '</strong><span>' + esc(o.customer_name) + '</span><span>' + money(o.total) + '</span><span>' + esc(statuses[o.order_status] || o.order_status) + '</span></summary><div class="order-card-body"><p><b>Data:</b> ' + esc(new Date(o.created_at).toLocaleString('pt-BR')) + '</p><p><b>Pagamento:</b> ' + esc(paymentStatuses[o.payment_status] || o.payment_status) + '</p><p><b>Forma de pagamento:</b> ' + esc(o.payment_method === 'pix_whatsapp' ? 'PIX direto com a loja' : o.payment_method === 'mercado_pago' ? 'Mercado Pago' : o.payment_method || 'Não informado') + '</p><p><b>E-mail:</b> ' + esc(o.customer_email) + '</p><p><b>Telefone:</b> ' + esc(o.customer_phone) + '</p><p><b>Endereço:</b> ' + esc(address) + '</p><p><b>Frete:</b> ' + esc([o.shipping_company,o.shipping_service].filter(Boolean).join(' · ')) + ' — ' + money(o.shipping_price) + '</p><p><b>Rastreamento:</b> ' + esc(o.tracking_code || 'Ainda não informado') + '</p><p><b>Subtotal:</b> ' + money(o.subtotal) + '</p><p><b>Total:</b> ' + money(o.total) + '</p><b>Produtos:</b><ul>' + items + '</ul><button type="button" class="btn btn-ghost" data-copy-order="' + esc(o.id) + '">Copiar resumo do pedido</button>' + (o.order_status === 'pending_payment' && o.payment_status === 'pending' ? '<button type="button" class="btn btn-ghost" data-cancel-order="' + esc(o.id) + '">Cancelar pedido e devolver estoque</button>' : '') + (o.payment_method === 'pix_whatsapp' && o.payment_status === 'pending' && o.order_status === 'pending_payment' && new Date(o.payment_expires_at).getTime() > Date.now() ? '<button type="button" class="btn btn-ghost" data-confirm-pix="' + esc(o.id) + '">Confirmar PIX recebido</button>' : '') + (o.payment_status === 'approved' && ['paid','preparing','shipped'].includes(o.order_status) ? '<button type="button" class="btn btn-ghost" data-progress-order="' + esc(o.id) + '">' + (o.order_status === 'paid' ? 'Iniciar preparação' : o.order_status === 'preparing' ? 'Registrar envio' : 'Marcar como entregue') + '</button>' : '') + (localPaymentTest && o.payment_method === 'mercado_pago' && o.payment_status === 'pending' && o.order_status === 'pending_payment' && Date.parse(o.payment_expires_at || '') > Date.now() ? '<button type="button" class="btn btn-ghost" data-mp-order-test="' + esc(o.id) + '">Gerar checkout Mercado Pago — Teste</button><div class="mp-order-test-result" data-mp-order-result="' + esc(o.id) + '" role="status"></div>' : '') + '<p class="orders-note">Alterações exigem autorização no servidor.</p></div></details>';
+      return '<details class="order-card"><summary title="Clique para visualizar todos os dados do pedido"><strong>Pedido #' + esc(o.order_number) + '</strong><span>' + esc(o.customer_name) + '</span><span>' + money(o.total) + '</span><span>' + esc(statuses[o.order_status] || o.order_status) + '</span></summary><div class="order-card-body"><p><b>Data:</b> ' + esc(new Date(o.created_at).toLocaleString('pt-BR')) + '</p><p><b>Pagamento:</b> ' + esc(paymentStatuses[o.payment_status] || o.payment_status) + '</p><p><b>Forma de pagamento:</b> ' + esc(o.payment_method === 'pix_whatsapp' ? 'PIX direto com a loja' : o.payment_method === 'mercado_pago' ? 'Mercado Pago' : o.payment_method || 'Não informado') + '</p><p><b>E-mail:</b> ' + esc(o.customer_email) + '</p><p><b>Telefone:</b> ' + esc(o.customer_phone) + '</p><p><b>Endereço:</b> ' + esc(address) + '</p><p><b>Frete:</b> ' + esc([o.shipping_company,o.shipping_service].filter(Boolean).join(' · ')) + ' — ' + money(o.shipping_price) + '</p><p><b>Rastreamento:</b> ' + esc(o.tracking_code || 'Ainda não informado') + '</p><p><b>Subtotal:</b> ' + money(o.subtotal) + '</p><p><b>Total:</b> ' + money(o.total) + '</p><b>Produtos:</b><ul>' + items + '</ul><button type="button" class="btn btn-ghost" data-copy-order="' + esc(o.id) + '">Copiar resumo do pedido</button>' + (o.order_status === 'pending_payment' && o.payment_status === 'pending' ? '<button type="button" class="btn btn-ghost" data-cancel-order="' + esc(o.id) + '">Cancelar pedido e devolver estoque</button>' : '') + (o.payment_method === 'pix_whatsapp' && o.payment_status === 'pending' && o.order_status === 'pending_payment' && new Date(o.payment_expires_at).getTime() > Date.now() ? '<button type="button" class="btn btn-ghost" data-confirm-pix="' + esc(o.id) + '">Confirmar PIX recebido</button>' : '') + (o.payment_status === 'approved' && ['paid','preparing','shipped'].includes(o.order_status) ? '<button type="button" class="btn btn-ghost" data-progress-order="' + esc(o.id) + '">' + (o.order_status === 'paid' ? 'Iniciar preparação' : o.order_status === 'preparing' ? 'Registrar envio' : 'Marcar como entregue') + '</button>' : '') + (localPaymentTest && o.payment_method === 'mercado_pago' && o.payment_status === 'pending' && o.order_status === 'pending_payment' && Date.parse(o.payment_expires_at || '') > Date.now() ? '<button type="button" class="btn btn-ghost" data-mp-order-test="' + esc(o.id) + '">Gerar PIX do pedido — Homologação</button><div class="mp-order-test-result" data-mp-order-result="' + esc(o.id) + '" role="status"></div>' : '') + '<p class="orders-note">Alterações exigem autorização no servidor.</p></div></details>';
     }).join('');
   }
-  // A cobrança é criada somente por Edge Function autenticada, nunca no navegador.
+  // PIX REAL vinculado a pedido: homologação local, admin autenticado e confirmação explícita.
+  // A Edge Function reutiliza a mesma cobrança em chamadas repetidas; não há novo débito.
   $('orders-list').addEventListener('click', async event => {
     const button = event.target.closest('[data-mp-order-test]');
     if (!button || !localPaymentTest) return;
     const order = orders.find(o => o.id === button.dataset.mpOrderTest);
     if (!order || order.payment_method !== 'mercado_pago' || order.payment_status !== 'pending' ||
         order.order_status !== 'pending_payment' || Date.parse(order.payment_expires_at || '') <= Date.now()) {
-      $('orders-message').textContent = 'Pedido não está elegível para homologação.';
+      $('orders-message').textContent = 'Pedido não está elegível para pagamento.';
       return;
     }
     const resultNode = button.parentElement.querySelector('[data-mp-order-result]');
-    const previous = paymentTestResults.get(order.id);
-    if (previous) {
-      resultNode.replaceChildren();
-      const link = document.createElement('a');
-      link.href = previous; link.target = '_blank'; link.rel = 'noopener noreferrer';
-      link.textContent = 'Abrir checkout de teste já gerado';
-      resultNode.append(link);
-      return;
-    }
-    if (!window.confirm('Gerar uma Order de HOMOLOGAÇÃO no Mercado Pago para o pedido #' +
-      order.order_number + ' (' + money(order.total) + ')? Não confirma pagamento nem altera estoque.')) return;
+    if (!window.confirm('ATENÇÃO: gerar PIX REAL de ' + money(order.total) +
+      ' para o pedido #' + order.order_number +
+      '. A cobrança será vinculada ao pedido e poderá ser paga. Não altera estoque nesta operação. Continuar?')) return;
     button.disabled = true;
-    resultNode.textContent = 'Gerando checkout de homologação…';
+    resultNode.textContent = 'Consultando ou gerando o PIX do pedido no Mercado Pago…';
     try {
       const client = window.getAdminSupabaseClient?.();
       if (!client) throw new Error('Cliente administrativo indisponível.');
       const { data: auth, error: authError } = await client.auth.getSession();
       if (authError || !auth?.session?.access_token) throw new Error('Faça login novamente.');
       const { data, error } = await client.functions.invoke('mercado-pago-store-order-test', {
-        body: { order_id: order.id }
+        body: { order_id: order.id, mode: 'production_pix' }
       });
       if (error) {
         let detail = '';
         try { detail = (await error.context?.json?.())?.error || ''; } catch (_) {}
-        throw new Error(detail || error.message || 'Falha ao criar checkout.');
+        throw new Error(detail || error.message || 'Falha ao gerar PIX do pedido.');
       }
-      if (data?.mode !== 'test_only' || data?.store_order_id !== order.id ||
-          Number(data?.amount) !== Number(order.total) || typeof data?.checkout_url !== 'string')
-        throw new Error('Resposta do checkout não corresponde ao pedido.');
-      const checkoutUrl = new URL(data.checkout_url);
-      if (checkoutUrl.protocol !== 'https:' || !['mercadopago.com.br', 'www.mercadopago.com.br'].includes(checkoutUrl.hostname))
-        throw new Error('Domínio de checkout não autorizado.');
-      paymentTestResults.set(order.id, checkoutUrl.href);
+      if (data?.mode !== 'production_pix_admin_test' ||
+          data?.store_order_id !== order.id ||
+          Number(data?.amount) !== Number(order.total) ||
+          typeof data?.mp_order_id !== 'string')
+        throw new Error('Resposta PIX não corresponde ao pedido.');
       resultNode.replaceChildren();
       const description = document.createElement('p');
-      description.textContent = '✓ Order de homologação: ' + data.mp_order_id + ' · ' + money(order.total) + '. Nenhum pagamento confirmado.';
-      const link = document.createElement('a');
-      link.href = checkoutUrl.href; link.target = '_blank'; link.rel = 'noopener noreferrer';
-      link.textContent = 'Abrir checkout de teste';
-      resultNode.append(description, link);
-      button.textContent = 'Checkout de teste gerado';
+      description.textContent = 'Pedido #' + order.order_number +
+        ' · PIX ' + money(order.total) +
+        ' · Order ' + data.mp_order_id +
+        (data.reused ? ' (cobrança existente)' : ' (cobrança criada)') +
+        ' · ' + (data.payment_status || data.order_status || 'aguardando');
+      resultNode.appendChild(description);
+      if (!data.has_pix) {
+        const note = document.createElement('p');
+        note.textContent = 'A Order foi vinculada, mas o QR Code ainda não está disponível. Não gere outro PIX. Consulte novamente este pedido.';
+        resultNode.appendChild(note);
+        button.disabled = false;
+        return;
+      }
+      const notice = document.createElement('p');
+      notice.textContent = 'PIX real gerado e vinculado. A confirmação automática do pedido ainda não está habilitada.';
+      resultNode.appendChild(notice);
+      if (data.qr_code_base64) {
+        const img = document.createElement('img');
+        img.alt = 'QR Code PIX do pedido #' + order.order_number;
+        img.src = 'data:image/png;base64,' + data.qr_code_base64;
+        img.style.cssText = 'display:block;width:220px;max-width:100%;margin:12px 0';
+        resultNode.appendChild(img);
+      }
+      if (data.qr_code) {
+        const label = document.createElement('label');
+        label.textContent = 'PIX Copia e Cola do pedido';
+        const code = document.createElement('textarea');
+        code.readOnly = true; code.rows = 3; code.value = data.qr_code;
+        code.style.cssText = 'display:block;width:100%;max-width:560px;margin:8px 0';
+        label.appendChild(code); resultNode.appendChild(label);
+        const copy = document.createElement('button');
+        copy.type = 'button'; copy.className = 'btn btn-ghost'; copy.textContent = 'Copiar PIX do pedido';
+        copy.addEventListener('click', async () => {
+          try { await navigator.clipboard.writeText(data.qr_code); copy.textContent = 'PIX copiado!'; }
+          catch (_) { code.select(); copy.textContent = 'Selecione e copie o código acima'; }
+        });
+        resultNode.appendChild(copy);
+      }
+      if (data.ticket_url) {
+        try {
+          const u = new URL(data.ticket_url);
+          if (u.protocol === 'https:' && (u.hostname === 'mercadopago.com.br' ||
+              u.hostname.endsWith('.mercadopago.com.br') ||
+              u.hostname === 'mercadopago.com' || u.hostname.endsWith('.mercadopago.com'))) {
+            const link = document.createElement('a');
+            link.href = u.href; link.target = '_blank'; link.rel = 'noopener noreferrer';
+            link.textContent = 'Abrir PIX no Mercado Pago';
+            resultNode.appendChild(link);
+          }
+        } catch (_) {}
+      }
+      button.textContent = 'PIX vinculado ao pedido';
     } catch (error) {
-      resultNode.textContent = 'Não foi possível gerar checkout: ' + (error?.message || 'erro desconhecido');
+      resultNode.textContent = 'Não foi possível consultar/gerar PIX: ' + (error?.message || 'erro desconhecido');
       button.disabled = false;
     }
   });
