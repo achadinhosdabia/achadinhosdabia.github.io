@@ -128,14 +128,18 @@
        if(error){
          let detail=null;try{detail=await error.context?.json?.()}catch(_){}
          throw new Error((detail?.error||error.message||'Falha ao consultar o PIX')+
-           (detail?.provider_status?' (HTTP '+detail.provider_status+')':''));
+           (detail?.possible_order_id?' ID encontrado: '+detail.possible_order_id+'.':'')+
+           (detail?.provider_status?' (HTTP '+detail.provider_status+')':'')+
+           (detail?.search_status?' | Busca HTTP '+detail.search_status:''));
        }
        if(data?.mode!=='pix_real_status_read_only'||data?.order_id!==id)
          throw new Error('Resposta de consulta inválida.');
        try{sessionStorage.setItem('bia_pix_real_last_order_id',id);}catch(_){}
        const detail=data.payment_status_detail||data.order_status_detail||'sem detalhe';
        statusResult.textContent=(data.is_paid?'✓ PIX pago e confirmado pelo Mercado Pago.':
-         data.is_waiting?'PIX ainda aguardando pagamento.':'PIX sem confirmação de pagamento.')+
+         data.is_waiting?'PIX ainda aguardando pagamento.':
+         !data.payment_details_available?'Order encontrada, mas sem detalhes da transação. Pagamento não confirmado.':
+         'PIX sem confirmação de pagamento.')+
          ' Order: '+data.order_status+' | pagamento: '+(data.payment_status||'não informado')+
          ' | detalhe: '+detail+
          '. Esta consulta não atualiza pedidos nem estoque.';
