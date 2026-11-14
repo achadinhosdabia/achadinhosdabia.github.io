@@ -46,6 +46,8 @@
        }
        if(data?.mode!=='pix_real_admin_test'||data?.amount!=='1.00')
          throw new Error('Resposta inesperada do serviço PIX.');
+       statusInput.value=data.order_id;
+       try{sessionStorage.setItem('bia_pix_real_last_order_id',data.order_id);}catch(_){}
        pixResult.replaceChildren();
        const summary=document.createElement('p');
        summary.textContent='Order: '+data.order_id+
@@ -93,6 +95,54 @@
      }catch(e){pixResult.textContent='PIX não concluído: '+(e?.message||'erro desconhecido');}
      finally{pixButton.disabled=false;}
    });
+   // Consultar a mesma cobrança real, sem gerar uma nova.
+   const statusBox=document.createElement('div');
+   statusBox.style.cssText='margin-top:18px;padding-top:12px;border-top:1px solid #e6d7e6';
+   const statusLabel=document.createElement('label');
+   statusLabel.textContent='Order do PIX de R$ 1,00 (já criado)';
+   const statusInput=document.createElement('input');
+   statusInput.type='text';statusInput.maxLength=50;
+   statusInput.placeholder='ORD...';
+   statusInput.style.cssText='display:block;width:100%;max-width:480px;margin:8px 0';
+   try{statusInput.value=sessionStorage.getItem('bia_pix_real_last_order_id')||'';}catch(_){}
+   statusLabel.appendChild(statusInput);statusBox.appendChild(statusLabel);
+   const statusButton=document.createElement('button');
+   statusButton.type='button';statusButton.className='btn btn-ghost';
+   statusButton.textContent='Consultar status do PIX existente';
+   statusBox.appendChild(statusButton);
+   const statusResult=document.createElement('p');
+   statusResult.setAttribute('role','status');statusBox.appendChild(statusResult);
+   section.appendChild(statusBox);
+   statusButton.addEventListener('click',async()=>{
+     const id=statusInput.value.trim().toUpperCase();
+     if(!/^ORD[A-Z0-9]{20,40}$/.test(id)){
+       statusResult.textContent='Informe a Order do PIX de R$ 1,00.';return;
+     }
+     statusButton.disabled=true;statusResult.textContent='Consultando Mercado Pago (sem gerar cobrança)…';
+     try{
+       const client=window.getAdminSupabaseClient?.();
+       if(!client)throw new Error('Cliente administrativo indisponível.');
+       const {data,error}=await client.functions.invoke('mercado-pago-pix-status-test',{
+         body:{order_id:id}
+       });
+       if(error){
+         let detail=null;try{detail=await error.context?.json?.()}catch(_){}
+         throw new Error((detail?.error||error.message||'Falha ao consultar o PIX')+
+           (detail?.provider_status?' (HTTP '+detail.provider_status+')':''));
+       }
+       if(data?.mode!=='pix_real_status_read_only'||data?.order_id!==id)
+         throw new Error('Resposta de consulta inválida.');
+       try{sessionStorage.setItem('bia_pix_real_last_order_id',id);}catch(_){}
+       const detail=data.payment_status_detail||data.order_status_detail||'sem detalhe';
+       statusResult.textContent=(data.is_paid?'✓ PIX pago e confirmado pelo Mercado Pago.':
+         data.is_waiting?'PIX ainda aguardando pagamento.':'PIX sem confirmação de pagamento.')+
+         ' Order: '+data.order_status+' | pagamento: '+(data.payment_status||'não informado')+
+         ' | detalhe: '+detail+
+         '. Esta consulta não atualiza pedidos nem estoque.';
+     }catch(e){statusResult.textContent='Consulta não concluída: '+(e?.message||'erro desconhecido');}
+     finally{statusButton.disabled=false;}
+   });
+
  }
 
  const form=section.querySelector('form'),msg=section.querySelector('#payment-settings-message');
