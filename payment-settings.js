@@ -16,72 +16,81 @@
  orderTestButton.textContent='Criar Order de teste (R$ 1,00)';
  orderTestButton.style.margin='12px 0 0 8px';section.appendChild(orderTestButton);
  const orderResult=document.createElement('div');orderResult.setAttribute('role','status');orderResult.style.marginTop='12px';section.appendChild(orderResult);
- // PIX pela Orders API: teste técnico isolado (R$ 50 fictícios), sem pedidos da loja.
+ // Teste controlado de PIX REAL, sem usar a simulação APRO nem alterar pedidos.
  if (['localhost','127.0.0.1'].includes(location.hostname)) {
    const pixButton=document.createElement('button');
    pixButton.type='button';pixButton.className='btn btn-ghost';
-   pixButton.textContent='Simular PIX pela API — Teste';
-   pixButton.style.margin='12px 0 0 8px';
-   section.appendChild(pixButton);
-   const inspectButton=document.createElement('button');
-   inspectButton.type='button';inspectButton.className='btn btn-ghost';
-   inspectButton.textContent='Inspecionar PIX já criado (sem cobrar)';
-   inspectButton.style.margin='12px 0 0 8px';section.appendChild(inspectButton);
-   const inspectResult=document.createElement('p');
-   inspectResult.setAttribute('role','status');section.appendChild(inspectResult);
-   inspectButton.addEventListener('click',async()=>{
-     inspectButton.disabled=true;
-     inspectResult.textContent='Consultando a Order PIX anterior…';
+   pixButton.textContent='Gerar PIX real de R$ 1,00 — Teste controlado';
+   pixButton.style.margin='12px 0 0 8px';section.appendChild(pixButton);
+   const pixResult=document.createElement('div');
+   pixResult.setAttribute('role','status');pixResult.style.marginTop='12px';
+   section.appendChild(pixResult);
+   let requestKey=null;
+   pixButton.addEventListener('click',async()=>{
+     if(!window.confirm('ATENÇÃO: será criada uma cobrança PIX REAL de R$ 1,00 na conta da loja. Não pague ainda. Não altera pedidos nem estoque. Deseja continuar?'))return;
+     if(!requestKey)requestKey=crypto.randomUUID();
+     pixButton.disabled=true;
+     pixResult.replaceChildren();
+     pixResult.textContent='Solicitando PIX real ao Mercado Pago…';
      try{
        const client=window.getAdminSupabaseClient?.();
        if(!client)throw new Error('Cliente administrativo indisponível.');
-       const {data,error}=await client.functions.invoke('mercado-pago-pix-inspect-test',{
-         body:{order_id:'ORDTST01M78KKXDD6K9Q2EY2K5J872S'}
+       const {data,error}=await client.functions.invoke('mercado-pago-pix-real-test',{
+         body:{request_key:requestKey}
        });
        if(error){
-         let detail=null;try{detail=await error.context?.json?.()}catch(_){}
-         throw new Error(detail?.error||error.message||'Falha ao consultar PIX.');
-       }
-       if(data?.mode!=='pix_sandbox_read_only')throw new Error('Resposta inesperada.');
-       inspectResult.textContent='Order: '+data.order_id+
-         ' | consulta: '+(data.lookup_method==='date_search'?'busca por data':'por ID')+
-         ' | status: '+data.order_status+' ('+(data.order_status_detail||'sem detalhe')+')'+
-         ' | pagamento: '+data.payment_status+' ('+(data.payment_status_detail||'sem detalhe')+')'+
-         ' | QR Code disponível: '+(data.has_qr_code?'sim':'não')+
-         ' | imagem QR: '+(data.has_qr_image?'sim':'não')+
-         ' | link de pagamento: '+(data.has_ticket_url?'sim':'não')+
-         '. Nenhuma cobrança nova foi criada.';
-     }catch(e){inspectResult.textContent='Inspeção não concluída: '+(e?.message||'erro desconhecido');}
-     finally{inspectButton.disabled=false;}
-   });
-   const pixResult=document.createElement('p');
-   pixResult.setAttribute('role','status');
-   section.appendChild(pixResult);
-   pixButton.addEventListener('click',async()=>{
-     if(!window.confirm('Executar simulação PIX isolada de R$ 50,00 fictícios na API do Mercado Pago? Não altera pedidos nem estoque.'))return;
-     pixButton.disabled=true;pixResult.textContent='Simulando PIX no ambiente de teste…';
-     try {
-       const client=window.getAdminSupabaseClient?.();
-       if(!client)throw new Error('Cliente administrativo indisponível.');
-       const {data:auth,error:authError}=await client.auth.getSession();
-       if(authError||!auth?.session?.access_token)throw new Error('Faça login novamente.');
-       const {data,error}=await client.functions.invoke('mercado-pago-pix-sandbox-test',{
-         body:{request_key:crypto.randomUUID()}
-       });
-       if(error){
-         let details=null;
-         try{details=await error.context?.json?.();}catch(_){}
-         throw new Error((details?.error||error.message||'Falha no teste')+
+         let details=null;try{details=await error.context?.json?.()}catch(_){}
+         throw new Error((details?.error||error.message||'Falha na criação do PIX')+
            (details?.provider_code?' · '+details.provider_code:'')+
            (details?.provider_status?' (HTTP '+details.provider_status+')':''));
        }
-       if(data?.mode!=='pix_sandbox_only'||data?.amount!=='50.00')
-         throw new Error('Resposta de homologação inválida.');
-       pixResult.textContent='✓ Simulação PIX criada. Order: '+data.order_id+
-         ' · status: '+(data.order_status||'não informado')+
-         ' · pagamento: '+(data.payment_status||'não informado')+
-         '. Nenhum pedido ou estoque da loja foi alterado.';
-     }catch(error){pixResult.textContent='Teste PIX não concluído: '+(error?.message||'erro desconhecido');}
+       if(data?.mode!=='pix_real_admin_test'||data?.amount!=='1.00')
+         throw new Error('Resposta inesperada do serviço PIX.');
+       pixResult.replaceChildren();
+       const summary=document.createElement('p');
+       summary.textContent='Order: '+data.order_id+
+         ' | status: '+(data.order_status||'não informado')+
+         ' | detalhe: '+(data.order_status_detail||data.payment_status_detail||'não informado');
+       pixResult.appendChild(summary);
+       if(!data.has_pix){
+         const pending=document.createElement('p');
+         pending.textContent='O Mercado Pago ainda não disponibilizou QR Code ou link PIX. Não crie outra cobrança: envie esta mensagem para análise.';
+         pixResult.appendChild(pending);
+         return;
+       }
+       const note=document.createElement('p');
+       note.textContent='PIX gerado! Teste real de R$ 1,00. Não pague até validarmos a integração.';
+       pixResult.appendChild(note);
+       if(data.qr_code_base64){
+         const img=document.createElement('img');
+         img.alt='QR Code PIX de R$ 1,00';
+         img.src='data:image/png;base64,'+data.qr_code_base64;
+         img.style.cssText='display:block;width:220px;max-width:100%;margin:12px 0';
+         pixResult.appendChild(img);
+       }
+       if(data.qr_code){
+         const label=document.createElement('label');
+         label.textContent='PIX Copia e Cola';
+         const code=document.createElement('textarea');
+         code.readOnly=true;code.rows=3;code.value=data.qr_code;
+         code.style.cssText='display:block;width:100%;max-width:560px;margin:8px 0';
+         label.appendChild(code);pixResult.appendChild(label);
+         const copy=document.createElement('button');
+         copy.type='button';copy.className='btn btn-ghost';copy.textContent='Copiar código PIX';
+         copy.addEventListener('click',async()=>{
+           try{await navigator.clipboard.writeText(data.qr_code);copy.textContent='Copiado!';}
+           catch(_){code.select();copy.textContent='Selecione e copie o código acima';}
+         });
+         pixResult.appendChild(copy);
+       }
+       if(data.ticket_url){
+         const link=document.createElement('a');
+         link.href=data.ticket_url;link.target='_blank';link.rel='noopener noreferrer';
+         link.textContent='Abrir instruções do PIX no Mercado Pago';
+         link.style.cssText='display:block;margin:12px 0';
+         pixResult.appendChild(link);
+       }
+     }catch(e){pixResult.textContent='PIX não concluído: '+(e?.message||'erro desconhecido');}
      finally{pixButton.disabled=false;}
    });
  }
