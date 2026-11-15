@@ -75,7 +75,18 @@ Deno.serve(async (req) => {
         !/^[A-Z]{2}$/.test(String(address.state ?? '').toUpperCase()))
       return respond(req, 400, { error: 'Endereço incompleto.' });
     if (!shipping || !String(shipping.company ?? '').trim() || !String(shipping.service ?? '').trim())
-      return respond(req, 400, { error: 'Frete não selecionado.' });
+      return respond(req, 400, { error: 'Modalidade de entrega não selecionada.' });
+    const mode = shipping.mode === undefined ? 'quote' : shipping.mode;
+    if (!['quote','arrange','pickup'].includes(mode))
+      return respond(req, 400, { error: 'Modalidade de entrega inválida.' });
+    const manualChoices: Record<string,{company:string;service:string;price:number}> = {
+      arrange:{company:'A combinar',service:'Entrega a combinar',price:0},
+      pickup:{company:'Retirada local',service:'Retirada em mãos',price:0},
+    };
+    const manual = mode !== 'quote';
+    if (manual && (shipping.company !== manualChoices[mode].company ||
+                   shipping.service !== manualChoices[mode].service))
+      return respond(req, 400, { error: 'Modalidade de entrega divergente.' });
     if (!['mercado_pago', 'pix_whatsapp'].includes(body.payment_method))
       return respond(req, 400, { error: 'Pagamento inválido.' });
 
@@ -117,24 +128,35 @@ Deno.serve(async (req) => {
       if (!res.ok) throw new Error('Falha na validação interna: ' + name);
       return res.json();
     };
+    const db = createClient(url, service, { auth: { persistSession: false } });
+    if (mode === 'pickup') {
+      const {data:settings,error:settingsError} = await db.from('store_settings')
+        .select('pickup_enabled').eq('id',1).maybeSingle();
+      if (settingsError) return respond(req, 503, {error:'Não foi possível verificar a retirada local.'});
+      if (settings?.pickup_enabled !== true)
+        return respond(req, 409, {error:'Retirada local indisponível no momento.'});
+    }
     const normalizedItems = [...grouped].map(([product_id, quantity]) => ({ product_id, quantity }));
-    const [catalog, freight] = await Promise.all([
-      invoke('checkout-preview', { items: normalizedItems }),
-      invoke('quote-shipping', { items: normalizedItems, destination_zip: digits(address.zip) }),
-    ]);
+    const [catalog, freight] = manual
+      ? [await invoke('checkout-preview', { items: normalizedItems }), null]
+      : await Promise.all([
+          invoke('checkout-preview', { items: normalizedItems }),
+          invoke('quote-shipping', { items: normalizedItems, destination_zip: digits(address.zip) }),
+        ]);
     if (catalog?.mode !== 'preview_only' || !Array.isArray(catalog.items) ||
-        catalog.items.length !== normalizedItems.length || !Array.isArray(freight?.quotes))
+        catalog.items.length !== normalizedItems.length || (!manual && !Array.isArray(freight?.quotes)))
       return respond(req, 409, { error: 'Produtos ou frete indisponíveis.' });
-    const selected = freight.quotes.find((q: { company?: unknown; service?: unknown }) =>
-      normalize(q.company) === normalize(shipping.company) &&
-      normalize(q.service) === normalize(shipping.service));
+    const selected = manual
+      ? manualChoices[mode]
+      : freight.quotes.find((q: { company?: unknown; service?: unknown }) =>
+          normalize(q.company) === normalize(shipping.company) &&
+          normalize(q.service) === normalize(shipping.service));
     const price = Number(selected?.price);
     if (!selected || !Number.isFinite(price) || price < 0)
       return respond(req, 409, { error: 'Frete alterado ou indisponível. Refaça a cotação.' });
 
     // O RPC relê preços, trava produtos e reserva estoque atomicamente.
     // Não aceitar preços ou total fornecidos pelo navegador.
-    const db = createClient(url, service, { auth: { persistSession: false } });
     const { data, error } = await db.rpc('create_store_order_idempotent', {
       p_request_key: requestKey,
       p_customer: {
