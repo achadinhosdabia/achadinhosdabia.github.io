@@ -11,6 +11,10 @@
   let checkoutRequestKey=null;
   const setMessage=(text)=>{message.textContent=text;};
   const digits=value=>String(value||'').replace(/\D/g,'');
+  const shippingMode=shipping=>shipping?.mode==='arrange'?'arrange':shipping?.mode==='pickup'?'pickup':'quote';
+  const deliveryText=shipping=>shippingMode(shipping)==='arrange'
+    ? 'Frete a combinar (não incluído no pagamento)'
+    : 'Retirada em mãos (a confirmar pelo WhatsApp)';
   const clearAddress=()=>{
     for(const name of ['shipping_street','shipping_neighborhood','shipping_city','shipping_state'])field(name).value='';
   };
@@ -97,6 +101,14 @@
       const total=box.querySelector('p');
       if(total)total.textContent='Subtotal conferido: '+money(data.subtotal)+' | Frete estimado: '+money(shipping)+' | Total estimado: '+money(Number(data.subtotal)+shipping);
       const note=box.querySelector('small');
+      if(['arrange','pickup'].includes(shippingMode(checkoutSnapshot.shipping))){
+        if(shipping!==0)throw new Error('Valor de entrega a combinar inválido.');
+        if(total)total.textContent='Subtotal conferido: '+money(data.subtotal)+' | '+deliveryText(checkoutSnapshot.shipping)+' | Total dos produtos: '+money(data.subtotal);
+        if(note)note.textContent='Produtos conferidos no Supabase. Eventual taxa de entrega será combinada separadamente pelo WhatsApp; não está incluída neste pedido.';
+        box.dataset.validation='ok';
+        setMessage('Produtos conferidos. '+deliveryText(checkoutSnapshot.shipping)+'. O pedido ainda será validado pelo servidor.');
+        return;
+      }
       if(note)note.textContent='Produtos e preços conferidos no Supabase. O frete ainda será validado pelo servidor antes do pedido.';
       box.dataset.validation='products-ok';
       setMessage('Produtos e preços conferidos. Revalidando o frete…');
@@ -160,8 +172,15 @@
     const heading=document.createElement('strong');heading.textContent='Resumo do pedido (prévia)';
     const list=document.createElement('ul');
     for(const line of lines){const li=document.createElement('li');li.textContent=line;list.appendChild(li);}
-    const total=document.createElement('p');total.textContent='Subtotal: '+money(subtotal)+' | Frete: '+money(shipping)+' | Total estimado: '+money(subtotal+shipping);
-    const note=document.createElement('small');note.textContent='Valores serão recalculados e validados no servidor antes de criar o pedido.';
+    const mode=shippingMode(checkoutSnapshot.shipping);
+    const total=document.createElement('p');
+    total.textContent=mode==='quote'
+      ? 'Subtotal: '+money(subtotal)+' | Frete: '+money(shipping)+' | Total estimado: '+money(subtotal+shipping)
+      : 'Produtos: '+money(subtotal)+' | '+deliveryText(checkoutSnapshot.shipping)+' | Total dos produtos: '+money(subtotal);
+    const note=document.createElement('small');
+    note.textContent=mode==='quote'
+      ? 'Valores serão recalculados e validados no servidor antes de criar o pedido.'
+      : 'Entrega ou retirada a confirmar com a loja. Eventual taxa de entrega não está incluída no valor dos produtos.';
     box.append(heading,list,total,note);
   }
   field('customer_cpf').addEventListener('blur',()=>{
@@ -214,7 +233,7 @@
       city:field('shipping_city').value.trim(),
       state:field('shipping_state').value.trim().toUpperCase()
     };
-    const shipping={company:checkoutSnapshot.shipping.company,service:checkoutSnapshot.shipping.service};
+    const shipping={mode:shippingMode(checkoutSnapshot.shipping),company:checkoutSnapshot.shipping.company,service:checkoutSnapshot.shipping.service};
     testButton.disabled=true;
     setMessage('Executando simulação segura no servidor…');
     try{
@@ -237,8 +256,11 @@
       }
       const box=document.getElementById('checkout-review');
       const total=box?.querySelector('p');
-      if(total)total.textContent='Simulação: produtos '+money(data.subtotal)+
-        ' | Frete '+money(data.shipping.price)+' | Total '+money(data.total);
+      if(total)total.textContent=data.shipping.mode==='arrange'
+        ? 'Simulação: produtos '+money(data.subtotal)+' | Frete a combinar (não incluído) | Total dos produtos '+money(data.total)
+        : data.shipping.mode==='pickup'
+        ? 'Simulação: produtos '+money(data.subtotal)+' | Retirada a combinar | Total dos produtos '+money(data.total)
+        : 'Simulação: produtos '+money(data.subtotal)+' | Frete '+money(data.shipping.price)+' | Total '+money(data.total);
       setMessage('Simulação aprovada! Total: '+money(data.total)+
         '. Nenhum pedido foi criado. A finalização continua desabilitada.');
     }catch(err){
@@ -278,6 +300,7 @@
         state:field('shipping_state').value.trim().toUpperCase()
       },
       shipping:{
+        mode:shippingMode(checkoutSnapshot.shipping),
         company:checkoutSnapshot.shipping.company,
         service:checkoutSnapshot.shipping.service
       },
@@ -329,7 +352,8 @@
         if(data?.mode!=='sandbox_order'||!data?.order?.order_number)
           throw new Error('Resposta inesperada da criação de pedidos.');
         createdOrder=data.order.order_number;
-        setMessage('Pedido de teste nº '+createdOrder+' registrado! Nenhuma cobrança foi iniciada.');
+        setMessage('Pedido de teste nº '+createdOrder+' registrado! Nenhuma cobrança foi iniciada.'+
+          (shippingMode(checkoutSnapshot.shipping)==='quote'?'':' A entrega ou retirada ainda deve ser combinada com a loja.'));
         createTestButton.textContent='Pedido nº '+createdOrder+' criado';
         createTestButton.disabled=true;
         let ordersLink=document.getElementById('checkout-test-orders-link');
@@ -342,6 +366,21 @@
           ordersLink.style.display='inline-block';
           ordersLink.style.marginTop='12px';
           createTestInfo.after(ordersLink);
+        }
+        if(shippingMode(checkoutSnapshot.shipping)!=='quote'){
+          const number=digits(typeof cfg!=='undefined'?cfg.whatsapp:'');
+          if(/^\d{12,15}$/.test(number) && !document.getElementById('checkout-test-whatsapp-link')){
+            const link=document.createElement('a');
+            link.id='checkout-test-whatsapp-link';
+            link.className='btn btn-ghost';
+            link.textContent='Combinar entrega ou retirada pelo WhatsApp';
+            link.target='_blank';
+            link.rel='noopener noreferrer';
+            const text='Olá! Quero combinar '+(shippingMode(checkoutSnapshot.shipping)==='pickup'?'a retirada':'a entrega')+
+              ' do pedido #'+createdOrder+' da Achadinhos da BIA. Meu CEP é '+digits(field('shipping_zip').value)+'.';
+            link.href='https://wa.me/'+number+'?text='+encodeURIComponent(text);
+            ordersLink.after(link);
+          }
         }
       }catch(error){
         setMessage('Pedido não confirmado: '+(error?.message||'Falha desconhecida')+'. Se houve falha de rede, confira os pedidos antes de tentar novamente.');
