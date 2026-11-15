@@ -16,7 +16,7 @@ function renderShippingWidget(){
   widget.className='shipping-widget';
   const origin=zipDigits(p.origin_zip||cfg.originZip||'18076070');
   const maskedOrigin=/^\d{8}$/.test(origin)?`${origin.slice(0,5)}-${origin.slice(5)}`:'a confirmar';
-  widget.innerHTML=`<h3>Entrega e frete</h3><p>Origem do produto: CEP ${maskedOrigin}</p><form class="freight-form"><label for="destination-zip">Calcule o frete para seu CEP</label><div class="freight-row"><input id="destination-zip" inputmode="numeric" placeholder="00000-000" maxlength="9" aria-label="CEP de destino" required><button class="btn btn-primary" type="submit">Calcular</button></div></form><div class="freight-result" role="status" aria-live="polite"></div><div class="freight-alternatives"><button type="button" data-delivery="arrange">Conversar sobre o frete ↗</button><button type="button" data-delivery="pickup">Combinar retirada em mãos ↗</button></div>`;
+  widget.innerHTML=`<h3>Entrega e frete</h3><p>Origem do produto: CEP ${maskedOrigin}</p><form class="freight-form"><label for="destination-zip">Calcule o frete para seu CEP</label><div class="freight-row"><input id="destination-zip" inputmode="numeric" placeholder="00000-000" maxlength="9" aria-label="CEP de destino" required><button class="btn btn-primary" type="submit">Calcular</button></div></form><div class="freight-result" role="status" aria-live="polite"></div><div class="freight-alternatives"><button type="button" data-delivery="arrange">Conversar sobre o frete ↗</button></div>`;
   details.insertBefore(widget,details.querySelector('#detail-buy'));
   const form=widget.querySelector('.freight-form');
   const result=widget.querySelector('.freight-result');
@@ -41,7 +41,6 @@ function renderShippingWidget(){
     const note=document.createElement('small');note.textContent='Valores e prazos estimados, sujeitos à confirmação antes da postagem.';result.appendChild(note);
   });
   widget.querySelector('[data-delivery="arrange"]').onclick=()=>arrangeDelivery(p,'combinar o frete',zipDigits(widget.querySelector('#destination-zip').value));
-  widget.querySelector('[data-delivery="pickup"]').onclick=()=>arrangeDelivery(p,'combinar retirada em mãos');
 }
 
 window.addEventListener('load',()=>{
