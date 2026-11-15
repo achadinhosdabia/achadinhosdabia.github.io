@@ -146,7 +146,7 @@
       }
       if(document.getElementById('cart-destination-zip').value.replace(/\D/g,'')!==destination)return;
       resetShipping();
-      shippingChoice={mode:'arrange',price:0,company:'A combinar',service:'Entrega local em Sorocaba/SP'};
+      shippingChoice={mode:'arrange',price:0,company:'A combinar',service:'Entrega a combinar'};
       setManualPressed('arrange');
       renderCart();
       result.textContent='Frete a combinar selecionado para Sorocaba/SP. Nenhuma taxa de entrega está incluída no valor dos produtos. Continue para informar seus dados.';
