@@ -77,11 +77,10 @@ Deno.serve(async (req) => {
     if (!shipping || !String(shipping.company ?? '').trim() || !String(shipping.service ?? '').trim())
       return respond(req, 400, { error: 'Modalidade de entrega não selecionada.' });
     const mode = shipping.mode === undefined ? 'quote' : shipping.mode;
-    if (!['quote','arrange','pickup'].includes(mode))
+    if (!['quote','arrange'].includes(mode))
       return respond(req, 400, { error: 'Modalidade de entrega inválida.' });
     const manualChoices: Record<string,{company:string;service:string;price:number}> = {
       arrange:{company:'A combinar',service:'Entrega a combinar',price:0},
-      pickup:{company:'Retirada local',service:'Retirada em mãos',price:0},
     };
     const manual = mode !== 'quote';
     if (manual && (shipping.company !== manualChoices[mode].company ||
@@ -129,13 +128,6 @@ Deno.serve(async (req) => {
       return res.json();
     };
     const db = createClient(url, service, { auth: { persistSession: false } });
-    if (mode === 'pickup') {
-      const {data:settings,error:settingsError} = await db.from('store_settings')
-        .select('pickup_enabled').eq('id',1).maybeSingle();
-      if (settingsError) return respond(req, 503, {error:'Não foi possível verificar a retirada local.'});
-      if (settings?.pickup_enabled !== true)
-        return respond(req, 409, {error:'Retirada local indisponível no momento.'});
-    }
     const normalizedItems = [...grouped].map(([product_id, quantity]) => ({ product_id, quantity }));
     const [catalog, freight] = manual
       ? [await invoke('checkout-preview', { items: normalizedItems }), null]
