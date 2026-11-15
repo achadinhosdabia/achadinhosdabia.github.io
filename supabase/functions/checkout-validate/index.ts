@@ -1,4 +1,3 @@
-import { createClient } from 'npm:@supabase/supabase-js@2';
 // Achadinhos da BIA — validação final em modo de simulação.
 // NÃO cria pedidos, NÃO reserva estoque, NÃO inicia cobranças.
 // O servidor consulta novamente catálogo e frete; não confia em valores do browser.
@@ -52,11 +51,10 @@ Deno.serve(async (req) => {
     if (!shipping || !String(shipping.company ?? '').trim() || !String(shipping.service ?? '').trim())
       return reply(400, { error: 'Selecione uma modalidade de entrega.' });
     const mode = shipping.mode === undefined ? 'quote' : shipping.mode;
-    if (!['quote','arrange','pickup'].includes(mode))
+    if (!['quote','arrange'].includes(mode))
       return reply(400, { error: 'Modalidade de entrega inválida.' });
     const manualChoices: Record<string,{company:string;service:string;price:number}> = {
       arrange:{company:'A combinar',service:'Entrega a combinar',price:0},
-      pickup:{company:'Retirada local',service:'Retirada em mãos',price:0},
     };
     const manual = mode !== 'quote';
     if (manual && (shipping.company !== manualChoices[mode].company ||
@@ -93,14 +91,6 @@ Deno.serve(async (req) => {
       }
       return data;
     };
-    if (mode === 'pickup') {
-      const db = createClient(url, key, { auth: { persistSession: false } });
-      const {data:settings,error:settingsError} = await db.from('store_settings')
-        .select('pickup_enabled').eq('id',1).maybeSingle();
-      if (settingsError) return reply(503, {error:'Não foi possível verificar a retirada local.'});
-      if (settings?.pickup_enabled !== true)
-        return reply(409, {error:'Retirada local indisponível no momento.'});
-    }
     const [catalog, freight] = manual
       ? [await invoke('checkout-preview', { items }), null]
       : await Promise.all([
