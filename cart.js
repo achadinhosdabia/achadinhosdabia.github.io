@@ -9,17 +9,10 @@
   const format = value => Number(value).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
   let shippingChoice = null;
   const shippingMoney = n => Number(n).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
-  const shippingMode = choice => choice?.mode === 'arrange' ? 'arrange' : choice?.mode === 'pickup' ? 'pickup' : 'quote';
+  const shippingMode = choice => choice?.mode === 'arrange' ? 'arrange' : 'quote';
   const setManualPressed = mode => {
-    for (const [name,id] of [['arrange','cart-arrange-delivery'],['pickup','cart-pickup-delivery']]) {
-      const button=document.getElementById(id);
-      if(button)button.setAttribute('aria-pressed',String(mode===name));
-    }
-  };
-  const updatePickupVisibility = () => {
-    const button=document.getElementById('cart-pickup-delivery');
-    if(button)button.hidden=typeof cfg!=='undefined' && cfg.pickupEnabled===false;
-    if(shippingMode(shippingChoice)==='pickup' && button?.hidden)resetShipping();
+    const button=document.getElementById('cart-arrange-delivery');
+    if(button)button.setAttribute('aria-pressed',String(mode==='arrange'));
   };
   function resetShipping() {
     shippingChoice = null;
@@ -51,7 +44,7 @@
     const shippingTotal = document.getElementById('cart-shipping-total');
     const grandTotal = document.getElementById('cart-grand-total');
     const mode=shippingMode(shippingChoice);
-    if (shippingTotal) shippingTotal.textContent = !shippingChoice ? 'A selecionar' : mode==='arrange' ? 'A combinar (não incluído)' : mode==='pickup' ? 'Retirada a confirmar' : format(shippingChoice.price);
+    if (shippingTotal) shippingTotal.textContent = !shippingChoice ? 'A selecionar' : mode==='arrange' ? 'A combinar (não incluído)' : format(shippingChoice.price);
     if (grandTotal) grandTotal.textContent = !shippingChoice ? 'A calcular' : format(total + shippingChoice.price) + (mode==='arrange' ? ' + eventual entrega' : '');
     list.innerHTML = valid.length ? valid.map(item => {
       const p = getProduct(item.id);
@@ -133,39 +126,29 @@
       }
     } catch (err) { result.textContent = err?.message || 'Não foi possível consultar o frete. Tente novamente.'; }
   });
-  function chooseManualDelivery(mode) {
+  function chooseManualDelivery() {
     const result=document.getElementById('cart-shipping-results');
     const destination=document.getElementById('cart-destination-zip').value.replace(/\D/g,'');
     if(!cart.length){result.textContent='Adicione produtos ao carrinho primeiro.';return;}
-    if(!/^\d{8}$/.test(destination)){result.textContent='Informe seu CEP para combinar a entrega ou retirada.';return;}
-    if(mode==='pickup' && typeof cfg!=='undefined' && cfg.pickupEnabled===false){
-      result.textContent='A retirada em mãos não está habilitada pela loja.';return;
-    }
+    if(!/^\d{8}$/.test(destination)){result.textContent='Informe seu CEP para combinar a entrega.';return;}
     const number=String(typeof cfg!=='undefined'?cfg.whatsapp:'').replace(/\D/g,'');
     if(!/^\d{12,15}$/.test(number)){
       result.textContent='O WhatsApp da loja ainda não foi configurado. Solicite ao administrador.';return;
     }
     resetShipping();
-    shippingChoice=mode==='arrange'
-      ? {mode,price:0,company:'A combinar',service:'Entrega a combinar'}
-      : {mode,price:0,company:'Retirada local',service:'Retirada em mãos'};
-    setManualPressed(mode);
+    shippingChoice={mode:'arrange',price:0,company:'A combinar',service:'Entrega a combinar'};
+    setManualPressed('arrange');
     renderCart();
-    result.textContent=mode==='arrange'
-      ? 'Frete a combinar selecionado. O pagamento dos produtos não inclui eventual taxa de entrega.'
-      : 'Retirada em mãos selecionada. Local e horário dependem de confirmação da loja.';
+    result.textContent='Frete a combinar selecionado. O pagamento dos produtos não inclui eventual taxa de entrega.';
     const lines=cart.map(item=>{
       const p=getProduct(item.id);
       return p?item.qty+' × '+p.name:'';
     }).filter(Boolean).join(', ');
-    const text='Olá! Gostaria de '+(mode==='arrange'?'combinar a entrega':'combinar a retirada em mãos')+
-      ' dos produtos: '+lines+'. Meu CEP é '+destination+'. Podemos combinar os detalhes?';
+    const text='Olá! Gostaria de combinar a entrega dos produtos: '+
+      lines+'. Meu CEP é '+destination+'. Podemos combinar os detalhes?';
     window.open('https://wa.me/'+number+'?text='+encodeURIComponent(text),'_blank','noopener');
   }
-  document.getElementById('cart-arrange-delivery').addEventListener('click',()=>chooseManualDelivery('arrange'));
-  document.getElementById('cart-pickup-delivery').addEventListener('click',()=>chooseManualDelivery('pickup'));
-  window.addEventListener('store-settings-loaded',updatePickupVisibility);
-  updatePickupVisibility();
+  document.getElementById('cart-arrange-delivery').addEventListener('click',chooseManualDelivery);
   document.getElementById('open-cart').addEventListener('click', () => { renderCart(); document.getElementById('cart-dialog').showModal(); });
   document.getElementById('close-cart').addEventListener('click', () => document.getElementById('cart-dialog').close());
   document.getElementById('cart-destination-zip').addEventListener('input', resetShipping);
