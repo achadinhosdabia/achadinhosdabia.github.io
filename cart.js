@@ -126,27 +126,33 @@
       }
     } catch (err) { result.textContent = err?.message || 'Não foi possível consultar o frete. Tente novamente.'; }
   });
-  function chooseManualDelivery() {
+  async function chooseManualDelivery() {
     const result=document.getElementById('cart-shipping-results');
     const destination=document.getElementById('cart-destination-zip').value.replace(/\D/g,'');
     if(!cart.length){result.textContent='Adicione produtos ao carrinho primeiro.';return;}
-    if(!/^\d{8}$/.test(destination)){result.textContent='Informe seu CEP para combinar a entrega.';return;}
-    const number=String(typeof cfg!=='undefined'?cfg.whatsapp:'').replace(/\D/g,'');
-    if(!/^\d{12,15}$/.test(number)){
-      result.textContent='O WhatsApp da loja ainda não foi configurado. Solicite ao administrador.';return;
-    }
-    resetShipping();
-    shippingChoice={mode:'arrange',price:0,company:'A combinar',service:'Entrega a combinar'};
-    setManualPressed('arrange');
-    renderCart();
-    result.textContent='Frete a combinar selecionado. O pagamento dos produtos não inclui eventual taxa de entrega.';
-    const lines=cart.map(item=>{
-      const p=getProduct(item.id);
-      return p?item.qty+' × '+p.name:'';
-    }).filter(Boolean).join(', ');
-    const text='Olá! Gostaria de combinar a entrega dos produtos: '+
-      lines+'. Meu CEP é '+destination+'. Podemos combinar os detalhes?';
-    window.open('https://wa.me/'+number+'?text='+encodeURIComponent(text),'_blank','noopener');
+    if(!/^\d{8}$/.test(destination)){result.textContent='Informe seu CEP de Sorocaba/SP antes de selecionar esta entrega.';return;}
+    const button=document.getElementById('cart-arrange-delivery');
+    button.disabled=true;
+    result.textContent='Verificando se o CEP pertence a Sorocaba/SP…';
+    try {
+      const response=await fetch('https://viacep.com.br/ws/'+destination+'/json/');
+      if(!response.ok)throw new Error('Não foi possível consultar o CEP.');
+      const address=await response.json();
+      if(address.erro)throw new Error('CEP não encontrado.');
+      const city=String(address.localidade||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase();
+      if(city!=='sorocaba'||String(address.uf||'').toUpperCase()!=='SP'){
+        result.textContent='Frete a combinar disponível exclusivamente para entregas em Sorocaba/SP. Escolha uma transportadora para outros municípios.';
+        return;
+      }
+      if(document.getElementById('cart-destination-zip').value.replace(/\D/g,'')!==destination)return;
+      resetShipping();
+      shippingChoice={mode:'arrange',price:0,company:'A combinar',service:'Entrega local em Sorocaba/SP'};
+      setManualPressed('arrange');
+      renderCart();
+      result.textContent='Frete a combinar selecionado para Sorocaba/SP. Nenhuma taxa de entrega está incluída no valor dos produtos. Continue para informar seus dados.';
+    } catch(error) {
+      result.textContent=(error?.message||'Falha ao validar CEP.')+' Tente novamente.';
+    } finally {button.disabled=false;}
   }
   document.getElementById('cart-arrange-delivery').addEventListener('click',chooseManualDelivery);
   document.getElementById('open-cart').addEventListener('click', () => { renderCart(); document.getElementById('cart-dialog').showModal(); });
