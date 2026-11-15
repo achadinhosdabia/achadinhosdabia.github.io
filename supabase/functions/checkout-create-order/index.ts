@@ -86,6 +86,21 @@ Deno.serve(async (req) => {
     if (manual && (shipping.company !== manualChoices[mode].company ||
                    shipping.service !== manualChoices[mode].service))
       return respond(req, 400, { error: 'Modalidade de entrega divergente.' });
+    if (mode === 'arrange') {
+      const city = normalize(String(address.city ?? '')).normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      if (city !== 'sorocaba' || String(address.state ?? '').toUpperCase() !== 'SP')
+        return respond(req, 400, { error: 'Frete a combinar disponível somente para Sorocaba/SP.' });
+      // Não confiar somente na cidade digitada pelo cliente: validar o CEP no servidor.
+      const zipResponse = await fetch('https://viacep.com.br/ws/' + digits(address.zip) + '/json/', {
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!zipResponse.ok)
+        return respond(req, 503, { error: 'Não foi possível validar o CEP da entrega.' });
+      const zipData = await zipResponse.json();
+      const zipCity = normalize(zipData?.localidade).normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      if (zipData?.erro || zipCity !== 'sorocaba' || String(zipData?.uf ?? '').toUpperCase() !== 'SP')
+        return respond(req, 400, { error: 'O CEP informado não pertence a Sorocaba/SP.' });
+    }
     if (!['mercado_pago', 'pix_whatsapp'].includes(body.payment_method))
       return respond(req, 400, { error: 'Pagamento inválido.' });
 
