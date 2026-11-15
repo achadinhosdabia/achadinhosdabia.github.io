@@ -11,10 +11,8 @@
   let checkoutRequestKey=null;
   const setMessage=(text)=>{message.textContent=text;};
   const digits=value=>String(value||'').replace(/\D/g,'');
-  const shippingMode=shipping=>shipping?.mode==='arrange'?'arrange':shipping?.mode==='pickup'?'pickup':'quote';
-  const deliveryText=shipping=>shippingMode(shipping)==='arrange'
-    ? 'Frete a combinar (não incluído no pagamento)'
-    : 'Retirada em mãos (a confirmar pelo WhatsApp)';
+  const shippingMode=shipping=>shipping?.mode==='arrange'?'arrange':'quote';
+  const deliveryText=()=> 'Frete a combinar (não incluído no pagamento)';
   const clearAddress=()=>{
     for(const name of ['shipping_street','shipping_neighborhood','shipping_city','shipping_state'])field(name).value='';
   };
@@ -101,7 +99,7 @@
       const total=box.querySelector('p');
       if(total)total.textContent='Subtotal conferido: '+money(data.subtotal)+' | Frete estimado: '+money(shipping)+' | Total estimado: '+money(Number(data.subtotal)+shipping);
       const note=box.querySelector('small');
-      if(['arrange','pickup'].includes(shippingMode(checkoutSnapshot.shipping))){
+      if(shippingMode(checkoutSnapshot.shipping)==='arrange'){
         if(shipping!==0)throw new Error('Valor de entrega a combinar inválido.');
         if(total)total.textContent='Subtotal conferido: '+money(data.subtotal)+' | '+deliveryText(checkoutSnapshot.shipping)+' | Total dos produtos: '+money(data.subtotal);
         if(note)note.textContent='Produtos conferidos no Supabase. Eventual taxa de entrega será combinada separadamente pelo WhatsApp; não está incluída neste pedido.';
@@ -180,7 +178,7 @@
     const note=document.createElement('small');
     note.textContent=mode==='quote'
       ? 'Valores serão recalculados e validados no servidor antes de criar o pedido.'
-      : 'Entrega ou retirada a confirmar com a loja. Eventual taxa de entrega não está incluída no valor dos produtos.';
+      : 'Entrega a confirmar com a loja. Eventual taxa de entrega não está incluída no valor dos produtos.';
     box.append(heading,list,total,note);
   }
   field('customer_cpf').addEventListener('blur',()=>{
@@ -258,8 +256,6 @@
       const total=box?.querySelector('p');
       if(total)total.textContent=data.shipping.mode==='arrange'
         ? 'Simulação: produtos '+money(data.subtotal)+' | Frete a combinar (não incluído) | Total dos produtos '+money(data.total)
-        : data.shipping.mode==='pickup'
-        ? 'Simulação: produtos '+money(data.subtotal)+' | Retirada a combinar | Total dos produtos '+money(data.total)
         : 'Simulação: produtos '+money(data.subtotal)+' | Frete '+money(data.shipping.price)+' | Total '+money(data.total);
       setMessage('Simulação aprovada! Total: '+money(data.total)+
         '. Nenhum pedido foi criado. A finalização continua desabilitada.');
@@ -353,7 +349,7 @@
           throw new Error('Resposta inesperada da criação de pedidos.');
         createdOrder=data.order.order_number;
         setMessage('Pedido de teste nº '+createdOrder+' registrado! Nenhuma cobrança foi iniciada.'+
-          (shippingMode(checkoutSnapshot.shipping)==='quote'?'':' A entrega ou retirada ainda deve ser combinada com a loja.'));
+          (shippingMode(checkoutSnapshot.shipping)==='quote'?'':' A entrega ainda deve ser combinada com a loja.'));
         createTestButton.textContent='Pedido nº '+createdOrder+' criado';
         createTestButton.disabled=true;
         let ordersLink=document.getElementById('checkout-test-orders-link');
@@ -373,10 +369,10 @@
             const link=document.createElement('a');
             link.id='checkout-test-whatsapp-link';
             link.className='btn btn-ghost';
-            link.textContent='Combinar entrega ou retirada pelo WhatsApp';
+            link.textContent='Combinar entrega pelo WhatsApp';
             link.target='_blank';
             link.rel='noopener noreferrer';
-            const text='Olá! Quero combinar '+(shippingMode(checkoutSnapshot.shipping)==='pickup'?'a retirada':'a entrega')+
+            const text='Olá! Quero combinar a entrega'+
               ' do pedido #'+createdOrder+' da Achadinhos da BIA. Meu CEP é '+digits(field('shipping_zip').value)+'.';
             link.href='https://wa.me/'+number+'?text='+encodeURIComponent(text);
             ordersLink.after(link);
