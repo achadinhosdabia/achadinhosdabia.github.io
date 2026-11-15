@@ -2,7 +2,7 @@
 async function loadStoreSettings(){
   if(!db)return;
   const {data,error}=await db.from('store_settings').select('whatsapp,origin_zip,pickup_enabled').eq('id',1).maybeSingle();
-  if(!error&&data){cfg.whatsapp=data.whatsapp||'';cfg.originZip=data.origin_zip||'18076070';}
+  if(!error&&data){cfg.whatsapp=data.whatsapp||'';cfg.originZip=data.origin_zip||'18076070';cfg.pickupEnabled=data.pickup_enabled===true;window.dispatchEvent(new Event('store-settings-loaded'));}
   const field=document.getElementById('store-whatsapp');
   if(field)field.value=cfg.whatsapp||'';
   document.getElementById('origin-zip').value=cfg.originZip||'18076070';
